@@ -83,6 +83,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	}
 	void lostConnection(SocketHandler socket){
 		decrement();
+		del(socket);
 		lostConnectionImpl(socket);
 	};
 	void lostConnectionImpl(SocketHandler socket){
