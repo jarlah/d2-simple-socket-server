@@ -37,22 +37,19 @@ int main(char[][] args)
 class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	this(){
 		super();
-		writeln("initializing simple client handler");
-		// TODO
 	}
+	
 	override void handleCommandImpl(SocketHandler socket, string command){
-		writeln("Got message: "~command);
+		log("Got message: "~command);
 	}
+	
 	override void closingConnectionImpl(SocketHandler socket){
-		writeln("Closing socket: "~to!string(socket));
+		log("Closing socket: "~to!string(socket));
 	}
 }
 
 class AbstractClientCommandHandler: ClientCommandHandler {
-	this(){
-		writeln("initializing abstract client handler");
-		// TODO
-	}
+	this(){}
 	
 	uint _size = 0;
 	
@@ -63,6 +60,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	final void handleCommand(SocketHandler socket, string command){
 		handleCommandImpl(socket,command);
 	};
+	
 	void handleCommandImpl(SocketHandler socket, string commandHandler){
 		// TODO
 	}
@@ -72,6 +70,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 		add(socket);
 		gotConnectedImpl(socket);
 	};
+	
 	void gotConnectedImpl(SocketHandler socket){
 		// TODO
 	}
@@ -79,6 +78,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	final void gotRejected(Socket socket){
 		gotRejectedImpl(socket);
 	};
+	
 	void gotRejectedImpl(Socket socket){
 		// TODO
 	}
@@ -86,6 +86,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	final void closingConnection(SocketHandler socket){
 		closingConnectionImpl(socket);
 	};
+	
 	void closingConnectionImpl(SocketHandler socket){
 		// TODO
 	}
@@ -95,21 +96,23 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 		del(socket);
 		lostConnectionImpl(socket);
 	};
+	
 	void lostConnectionImpl(SocketHandler socket){
 		// TODO
 	}
 	
 	final void decrement(){
 		synchronized {
-			_size--;
-			writeln("Current size is: "~to!string(_size));
+			if(_size>0)
+				_size--;
+			log("Current size is: "~to!string(_size));
 		}
 	}
 	
 	final void increment(){
 		synchronized {
 			_size++;
-			writeln("Current size is: "~to!string(_size));
+			log("Current size is: "~to!string(_size));
 		}
 	}
 	
@@ -117,22 +120,35 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 		synchronized {
 			enforce(socket);
 			sockets ~= socket;
-			writeln("Adding socket to internal list. Current size: "~to!string(sockets.length));
+			log("Adding socket to internal list");
 		}
 	}
 	
 	final void del(SocketHandler socket){
 		synchronized {
 			ulong index;
-			int i;
-			for(i=0;i<sockets.length;i++){
-				if(socket == sockets[i]){
+			
+			bool found = false;
+			
+			foreach(int i, SocketHandler sh; sockets){
+				if(sh == socket){
 					index = i;
+					found = true;
 					break;
 				}
 			}
-			sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
-			writeln("Deleting socket from internal list. Current size: "~to!string(sockets.length));
+			
+			if(found){
+				log("Found socket");
+				if(sockets.length == 1){
+					log("Cleared first item from array");
+					sockets.clear();
+				}else{
+					log("Removed item from array");
+					sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
+				}
+				log("Deleting socket from internal list");
+			}
 		}
 	}
 }
@@ -178,27 +194,33 @@ class SocketHandler: Thread {
 		super(&run);
 		this.socket = sock;
 		this.commandHandler = commandHandler;
+		enforce(commandHandler);
 	}
 	
 	private:
 	void run(){
-		commandHandler.gotConnected(this);
-		while(true){
-			int read;
-			char[] buf = receiveFromSocket(bytesToRead, read);
-			if (Socket.ERROR == read) {
-				writeln("Connection error.");
-				goto sock_down;
-			} else if (0 == read) {
-				sock_down:
-				commandHandler.closingConnection(this);
-				socket.close();
-				break;
-			} else {
-				commandHandler.handleCommand(this, to!string(buf[0 .. read]));
+		try{
+			commandHandler.gotConnected(this);
+			while(true){
+				int read;
+				char[] buf = receiveFromSocket(bytesToRead, read);
+				if (Socket.ERROR == read) {
+					log("Connection error.");
+					goto sock_down;
+				} else if (0 == read) {
+					sock_down:
+					commandHandler.closingConnection(this);
+					socket.close();
+					break;
+				} else {
+					commandHandler.handleCommand(this, to!string(buf[0 .. read]));
+				}
 			}
+		}catch(Throwable e){
+			log("Socket handler failed");
+		}finally{
+			commandHandler.lostConnection(this);
 		}
-		commandHandler.lostConnection(this);
 	}
 	
 	char[] receiveFromSocket(uint numBytes, ref int readBytes)
@@ -217,9 +239,9 @@ class QuickServer {
 	auto host 		= "localhost";
 	auto port 		= 1234;
 	auto name 		= "QuickServer";
-	auto blocking 	= false;
-	auto backlog 	= 10;
-	const auto max 	= 60;
+	auto blocking 	= true;
+	auto backlog 	= 60;
+	const auto max 	= 120;
 	
 	ClientCommandHandler commandHandler;
 
@@ -230,55 +252,45 @@ class QuickServer {
 	
 	void startServer(){
 		Socket listener = new TcpSocket;
-		
 		assert(listener.isAlive);
-		
 		listener.blocking = blocking;
 		listener.bind(new InternetAddress(chars(host),to!ushort(port)));
 		listener.listen(backlog);
-		
-		writefln("Listening on port %d.", port);
-		
-		// I have not passed any size to the SocketSet constructor because I am only going to retain the listener in it.
+			
+		log("Listening on port "~to!string(port));
+
 		SocketSet sset = new SocketSet();
 		sset.add(listener);
 		
 		do{
-			writeln("Listening for new socket connections");
+			scope(failure){
+				log("An error occured while accepting. Lets continue.");
+				continue;
+			}
 			
 			Socket.select(sset,null,null);
 			
-			if(sset.isSet(listener)){
-				Socket sn;
+			if (commandHandler.size() < max)
+			{
+				Socket sn = listener.accept();
 				
-				scope(failure){
-					writefln("Error while trying to accept");
-					if (sn)
-						sn.close();
-				}
-
-				sn = listener.accept();
-				
+				if(sn is null)
+					continue;
+					
 				assert(sn.isAlive);
 				
-				writeln("Tentatively accepted new socket");
+				SocketHandler sh = new SocketHandler(sn, commandHandler);
 				
-				if (commandHandler.size() < max)
-				{
-					writeln("Acknowledging new socket ...");
-					assert(listener.isAlive);
-					SocketHandler sh = new SocketHandler(sn, commandHandler);
-					sh.start();
-					writeln("Acknowledged new socket");
-				} else {
-					writeln("Rejecting new socket...");
-					commandHandler.gotRejected(sn);
-					sn.close();
-					assert(!sn.isAlive);
-					assert(listener.isAlive);
-					writeln("Rejected new socket");
-				}
+				sh.start();
+			} else {
+				log("Rejected new socket: "~to!string(commandHandler.size()));
 			}
 		}while(true);
+	}
+}
+
+void log(string str){
+	synchronized{
+		writeln(str);
 	}
 }
