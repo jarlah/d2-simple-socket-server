@@ -64,6 +64,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	}
 	void gotConnected(SocketHandler socket){
 		increment();
+		add(socket);
 		gotConnectedImpl(socket);
 	};
 	void gotConnectedImpl(SocketHandler socket){
@@ -89,35 +90,43 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	void lostConnectionImpl(SocketHandler socket){
 		// TODO
 	}
-	final void decrement(){
-		_size--;
-		writeln("Current size is: "~to!string(_size));
+	void decrement(){
+		synchronized {
+			_size--;
+			writeln("Current size is: "~to!string(_size));
+		}
 	}
-	final void increment(){
-		_size++;
-		writeln("Current size is: "~to!string(_size));
+	void increment(){
+		synchronized {
+			_size++;
+			writeln("Current size is: "~to!string(_size));
+		}
 	}
-	ulong add(SocketHandler socket){
-		enforce(socket);
-		ulong oldSize = sockets.length;
-		sockets ~= socket;
-		writeln("Adding socket to internal list. Current size: "~to!string(sockets.length));
-		return oldSize-1;
+	void add(SocketHandler socket){
+		synchronized {
+			enforce(socket);
+			sockets ~= socket;
+			writeln("Adding socket to internal list. Current size: "~to!string(sockets.length));
+		}
 	}
 	void del(SocketHandler socket){
-		ulong index;
-		int i;
-		for(i=0;i<sockets.length;i++){
-			if(socket == sockets[i])
-				index = i;
+		synchronized {
+			ulong index;
+			int i;
+			for(i=0;i<sockets.length;i++){
+				if(socket == sockets[i]){
+					index = i;
+					break;
+				}
+			}
+			sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
+			writeln("Deleting socket from internal list. Current size: "~to!string(sockets.length));
 		}
-		sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
-		writeln("Deleting socket from internal list. Current size: "~to!string(sockets.length));
 	}
 }
 
 interface ClientCommandHandler {
-	ulong add(SocketHandler socket);
+	void add(SocketHandler socket);
 	void del(SocketHandler socket);
 	uint size();
 	void gotConnected(SocketHandler handler)
@@ -153,13 +162,10 @@ class SocketHandler: Thread {
 	
 	const int bytesToRead = 1024;
 	
-	ulong id;
-	
 	this(Socket sock, ClientCommandHandler commandHandler){
 		super(&run);
 		this.socket = sock;
 		this.commandHandler = commandHandler;
-		this.id = this.commandHandler.add(this);
 	}
 	
 	private:
@@ -167,7 +173,7 @@ class SocketHandler: Thread {
 		commandHandler.gotConnected(this);
 		while(true){
 			int read;
-			char[] buf = this.read(bytesToRead, read);
+			char[] buf = receiveFromSocket(bytesToRead, read);
 			if (Socket.ERROR == read) {
 				writeln("Connection error.");
 				goto sock_down;
@@ -183,7 +189,7 @@ class SocketHandler: Thread {
 		commandHandler.lostConnection(this);
 	}
 	
-	char[] read(uint numBytes, ref int readBytes)
+	char[] receiveFromSocket(uint numBytes, ref int readBytes)
 	in {
 		enforce(numBytes);
 	} out (result) {
@@ -221,6 +227,7 @@ class QuickServer {
 		
 		writefln("Listening on port %d.", port);
 		
+		// I have not passed any size to the SocketSet constructor because I am only going to retain the listener in it.
 		SocketSet sset = new SocketSet();
 		sset.add(listener);
 		
