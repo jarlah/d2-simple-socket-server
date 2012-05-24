@@ -53,16 +53,21 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 		writeln("initializing abstract client handler");
 		// TODO
 	}
+	
 	uint _size = 0;
+	
 	SocketHandler[] sockets;
+	
 	uint size(){ return _size; }
-	void handleCommand(SocketHandler socket, string command){
+	
+	final void handleCommand(SocketHandler socket, string command){
 		handleCommandImpl(socket,command);
 	};
 	void handleCommandImpl(SocketHandler socket, string commandHandler){
 		// TODO
 	}
-	void gotConnected(SocketHandler socket){
+	
+	final void gotConnected(SocketHandler socket){
 		increment();
 		add(socket);
 		gotConnectedImpl(socket);
@@ -70,19 +75,22 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	void gotConnectedImpl(SocketHandler socket){
 		// TODO
 	}
-	void gotRejected(Socket socket){
+	
+	final void gotRejected(Socket socket){
 		gotRejectedImpl(socket);
 	};
 	void gotRejectedImpl(Socket socket){
 		// TODO
 	}
-	void closingConnection(SocketHandler socket){
+	
+	final void closingConnection(SocketHandler socket){
 		closingConnectionImpl(socket);
 	};
 	void closingConnectionImpl(SocketHandler socket){
 		// TODO
 	}
-	void lostConnection(SocketHandler socket){
+	
+	final void lostConnection(SocketHandler socket){
 		decrement();
 		del(socket);
 		lostConnectionImpl(socket);
@@ -90,26 +98,30 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	void lostConnectionImpl(SocketHandler socket){
 		// TODO
 	}
-	void decrement(){
+	
+	final void decrement(){
 		synchronized {
 			_size--;
 			writeln("Current size is: "~to!string(_size));
 		}
 	}
-	void increment(){
+	
+	final void increment(){
 		synchronized {
 			_size++;
 			writeln("Current size is: "~to!string(_size));
 		}
 	}
-	void add(SocketHandler socket){
+	
+	final void add(SocketHandler socket){
 		synchronized {
 			enforce(socket);
 			sockets ~= socket;
 			writeln("Adding socket to internal list. Current size: "~to!string(sockets.length));
 		}
 	}
-	void del(SocketHandler socket){
+	
+	final void del(SocketHandler socket){
 		synchronized {
 			ulong index;
 			int i;
