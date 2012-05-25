@@ -21,12 +21,6 @@ module server;
 
 import std.conv, std.socket, std.stdio, core.thread;
 
-alias charArr chars;
-
-const(char[]) charArr(string str){
-	return cast(const(char[]))str;
-}
-
 int main(char[][] args)
 {
 	QuickServer server =  new QuickServer("server.SimpleClientCommandHandler");
@@ -48,76 +42,48 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	}
 }
 
-class AbstractClientCommandHandler: ClientCommandHandler {
+class AbstractClientCommandHandler: IClientCommandHandler {
 	this(){}
-	
-	uint _size = 0;
 	
 	SocketHandler[] sockets;
 	
-	uint size(){ return _size; }
+	ulong _max = 0;
 	
 	final void handleCommand(SocketHandler socket, string command){
 		handleCommandImpl(socket,command);
 	};
-	
-	void handleCommandImpl(SocketHandler socket, string commandHandler){
-		// TODO
-	}
+	void handleCommandImpl(SocketHandler socket, string commandHandler){}
 	
 	final void gotConnected(SocketHandler socket){
-		increment();
 		add(socket);
 		gotConnectedImpl(socket);
 	};
-	
-	void gotConnectedImpl(SocketHandler socket){
-		// TODO
-	}
+	void gotConnectedImpl(SocketHandler socket){}
 	
 	final void gotRejected(Socket socket){
 		gotRejectedImpl(socket);
 	};
-	
-	void gotRejectedImpl(Socket socket){
-		// TODO
-	}
+	void gotRejectedImpl(Socket socket){}
 	
 	final void closingConnection(SocketHandler socket){
 		closingConnectionImpl(socket);
 	};
-	
-	void closingConnectionImpl(SocketHandler socket){
-		// TODO
-	}
+	void closingConnectionImpl(SocketHandler socket){}
 	
 	final void lostConnection(SocketHandler socket){
-		decrement();
 		del(socket);
 		lostConnectionImpl(socket);
 	};
+	void lostConnectionImpl(SocketHandler socket){}
 	
-	void lostConnectionImpl(SocketHandler socket){
-		// TODO
-	}
-	
-	final void decrement(){
-		synchronized {
-			if(_size>0)
-				_size--;
-			log("Current size is: "~to!string(_size));
-		}
-	}
-	
-	final void increment(){
-		synchronized {
-			_size++;
-			log("Current size is: "~to!string(_size));
+	final ulong size(){
+		synchronized(this){
+			return sockets.length;
 		}
 	}
 	
 	final void add(SocketHandler socket){
-		synchronized {
+		synchronized(this) {
 			enforce(socket);
 			sockets ~= socket;
 			log("Adding socket to internal list");
@@ -125,7 +91,7 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 	}
 	
 	final void del(SocketHandler socket){
-		synchronized {
+		synchronized(this) {
 			ulong index;
 			
 			bool found = false;
@@ -139,58 +105,36 @@ class AbstractClientCommandHandler: ClientCommandHandler {
 			}
 			
 			if(found){
-				log("Found socket");
 				if(sockets.length == 1){
-					log("Cleared first item from array");
 					sockets.clear();
 				}else{
-					log("Removed item from array");
 					sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
 				}
-				log("Deleting socket from internal list");
+				log("Deleted socket from internal list: current = "~to!string(size()));
 			}
 		}
 	}
 }
 
-interface ClientCommandHandler {
+interface IClientCommandHandler {
+	ulong size();
 	void add(SocketHandler socket);
 	void del(SocketHandler socket);
-	uint size();
-	void gotConnected(SocketHandler handler)
-	in {
-		enforce(handler);
-	}
-
-	void gotRejected(Socket socket)
-	in {
-		enforce(socket);
-	}
-	
-	void closingConnection(SocketHandler handler)
-	in {
-		enforce(handler);
-	}
-
-	void lostConnection(SocketHandler handler)
-	in {
-		enforce(handler);
-	}
-
-	void handleCommand(SocketHandler handler, string command)
-	in {
-		enforce(handler);
-	}
+	void gotConnected(SocketHandler handler);
+	void gotRejected(Socket socket);
+	void closingConnection(SocketHandler handler);
+	void lostConnection(SocketHandler handler);
+	void handleCommand(SocketHandler handler, string command);
 }
 
 class SocketHandler: Thread {
 	private Socket socket;
 
-	private ClientCommandHandler commandHandler;
+	private IClientCommandHandler commandHandler;
 	
 	const int bytesToRead = 1024;
 	
-	this(Socket sock, ClientCommandHandler commandHandler){
+	this(Socket sock, IClientCommandHandler commandHandler){
 		super(&run);
 		this.socket = sock;
 		this.commandHandler = commandHandler;
@@ -243,10 +187,10 @@ class QuickServer {
 	auto backlog 	= 60;
 	const auto max 	= 120;
 	
-	ClientCommandHandler commandHandler;
+	IClientCommandHandler commandHandler;
 
 	this(string handlerClass){
-		commandHandler = cast(ClientCommandHandler) Object.factory(handlerClass);
+		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);
 		enforce(commandHandler);
 	}
 	
@@ -289,7 +233,15 @@ class QuickServer {
 	}
 }
 
-void log(string str){
+alias charArr chars;
+
+const(char[]) charArr(string str){
+	return cast(const(char[]))str;
+}
+
+alias logToStdout log;
+
+void logToStdout(string str){
 	synchronized{
 		writeln(str);
 	}
