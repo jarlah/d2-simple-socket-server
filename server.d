@@ -35,6 +35,8 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	
 	override void handleCommandImpl(SocketHandler socket, string command){
 		log("Got message: "~command);
+		socket.send("Hello! You typed: "~command);
+		broadcast("Someone typed: "~command);
 	}
 	
 	override void closingConnectionImpl(SocketHandler socket){
@@ -76,6 +78,14 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 	};
 	void lostConnectionImpl(SocketHandler socket){}
 	
+	void broadcast(string msg){
+		synchronized(this){
+			foreach(SocketHandler socket; sockets){
+				socket.send(msg);
+			}
+		}
+	}
+	
 	final ulong size(){
 		synchronized(this){
 			return sockets.length;
@@ -102,7 +112,7 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 					found = true;
 					break;
 				}
-			}
+		}
 			
 			if(found){
 				if(sockets.length == 1){
@@ -120,6 +130,7 @@ interface IClientCommandHandler {
 	ulong size();
 	void add(SocketHandler socket);
 	void del(SocketHandler socket);
+	void broadcast(string msg);
 	void gotConnected(SocketHandler handler);
 	void gotRejected(Socket socket);
 	void closingConnection(SocketHandler handler);
@@ -127,52 +138,50 @@ interface IClientCommandHandler {
 	void handleCommand(SocketHandler handler, string command);
 }
 
-class SocketHandler: Thread {
+class SocketHandler{
 	private Socket socket;
 
 	private IClientCommandHandler commandHandler;
 	
 	const int bytesToRead = 1024;
 	
+	public:
 	this(Socket sock, IClientCommandHandler commandHandler){
-		super(&run);
 		this.socket = sock;
 		this.commandHandler = commandHandler;
 		enforce(commandHandler);
 	}
 	
+	void send(string msg){
+		socket.send(msg);
+	}
+	
 	private:
 	void run(){
-		try{
-			commandHandler.gotConnected(this);
-			while(true){
-				int read;
-				char[] buf = receiveFromSocket(bytesToRead, read);
-				if (Socket.ERROR == read) {
-					log("Connection error.");
-					goto sock_down;
-				} else if (0 == read) {
-					sock_down:
-					commandHandler.closingConnection(this);
-					socket.close();
-					break;
-				} else {
-					commandHandler.handleCommand(this, to!string(buf[0 .. read]));
-				}
-			}
-		}catch(Throwable e){
-			log("Socket handler failed");
-		}finally{
+		scope(exit)
 			commandHandler.lostConnection(this);
+			
+		commandHandler.gotConnected(this);	
+		
+		while(true){
+			int read;
+			char[] buf = receiveFromSocket(bytesToRead, read);
+			if (Socket.ERROR == read) {
+				log("Connection error.");
+				goto sock_down;
+			} else if (0 == read) {
+				sock_down:
+				commandHandler.closingConnection(this);
+				socket.close();
+				break;
+			} else {
+				commandHandler.handleCommand(this, to!string(buf[0 .. read]));
+			}
 		}
 	}
 	
 	char[] receiveFromSocket(uint numBytes, ref int readBytes)
-	in {
-		enforce(numBytes);
-	} out (result) {
-		enforce(result);
-	} body {
+	{
 		char[] buf = new char[numBytes];
 		readBytes = to!int(socket.receive(buf));
 		return buf;
