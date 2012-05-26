@@ -307,12 +307,11 @@ public:
         * @param fn {void function()}
         */
        void append(void function() fn)
-       {
+	   in {
+				enforce(fn,"fn is null");
+	   } body {
                Job *job;
                char  buf[256];
-
-               if (fn == null)
-                       throw new Exception("fn null");
 
                job = new Job;
                job.fn = fn;
@@ -329,12 +328,11 @@ public:
         * @param dg {void delegate()}
         */
        void append(void delegate() dg)
-       {
+       in {
+				enforce(dg, "dg is null");
+	   } body {
                Job *job;
                char  buf[256];
-
-               if (dg == null)
-                       throw new Exception("dg null");
 
                job = new Job;
                job.dg = dg;
