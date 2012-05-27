@@ -1,3 +1,7 @@
 compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
 
 Tested with the SocketClient class, that spawns 1000 concurrent threads.
+
+Has not been tested on or developed for Windows.
+
+This software is licensed under the GPL v2 license.
