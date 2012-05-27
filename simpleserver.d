@@ -24,7 +24,23 @@ import quickserver;
 
 int main(char[][] args)
 {
-	QuickServer server =  new QuickServer("quickserver.SimpleClientCommandHandler");
+	QuickServer server =  new QuickServer("simpleserver.SimpleClientCommandHandler");
 	server.startServer();
 	return 0;
+}
+
+class SimpleClientCommandHandler: AbstractClientCommandHandler {
+	this(){
+		super();
+	}
+	
+	override void handleCommandImpl(SocketHandler socket, string command){
+		log("Got message: "~command);
+		socket.send("Hello! You typed: "~command);
+		broadcast("Someone typed: "~command);
+	}
+	
+	override void closingConnectionImpl(SocketHandler socket){
+		log("Closing socket: "~to!string(socket));
+	}
 }
