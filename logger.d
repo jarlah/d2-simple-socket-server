@@ -101,16 +101,6 @@ abstract class AbstractLogger: ILogger {
 		return result;
 	}
 	
-	private static ILogger logger;
-	
-	static ILogger getSimpleLogger(){
-		synchronized {
-			if(logger is null)
-				logger = new SimpleLogger();
-			return logger;
-		}
-	}
-	
 	public abstract string dateStringImpl(SysTime systime);
 	
 	private void append(string msg){

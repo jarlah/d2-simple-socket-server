@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module quickserver.server;
 
-import std.conv, std.socket, std.stdio, core.thread;
+import std.conv, std.socket, std.stdio, core.thread, std.string;;
 
 import quickserver.threadpool;
 
@@ -166,7 +166,6 @@ private class SocketHandler{
 				socket.close();
 				break;
 			} else {
-				import std.string;
 				hasReceived = true;
 				commandHandler.handleCommand(this, strip(to!string(buf[0 .. read])));
 			}
