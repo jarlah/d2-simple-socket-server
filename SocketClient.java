@@ -36,7 +36,6 @@ public class SocketClient {
 					try {
 						echoSocket = new Socket("localhost", 1234);
 						out = new PrintWriter(echoSocket.getOutputStream(), true);
-						in = new BufferedReader(new InputStreamReader(echoSocket.getInputStream()));
 					} catch (UnknownHostException e) {
 						System.err.println("Don't know about host: localhost.");
 						System.exit(1);
@@ -44,20 +43,17 @@ public class SocketClient {
 						System.err.println("Couldn't get I/O for " + "the connection to: localhost.");
 						System.exit(1);
 					}
-
-					BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
 					
 					out.println("Hei");
 					out.flush();
 					out.close();
+					
 					try{
-						in.close();
-						stdIn.close();
 						echoSocket.close();
-					}catch(Exception e){}
-					
-					System.out.println("Thread finished");
-					
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+						
 					return null;
 				}
 			});

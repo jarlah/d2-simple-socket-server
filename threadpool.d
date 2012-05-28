@@ -1,7 +1,7 @@
 /**
  * Created and posted on D Lang forum by nickname "zsxxsz".
  **/
-module threadpool;
+module quickserver.threadpool;
 
 import std.conv, std.socket, std.stdio, core.thread;
 

@@ -16,36 +16,25 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-*//*
-D2 Simple Socket Server.
-
-Copyright (C) 2012 Jarl André Hübenthal
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-module quickserver;
+module quickserver.server;
 
 import std.conv, std.socket, std.stdio, core.thread;
 
-import threadpool;
+import quickserver.threadpool;
+
+import quickserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
-	this(){}
+	this(){
+		LoggerFactory lf = new LoggerFactory();
+		logger = lf.getSimpleLogger();
+	}
 	
 	SocketHandler[] sockets;
+	
+	ILogger logger;
 	
 	ulong _max = 0;
 	
@@ -94,7 +83,7 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 		synchronized(this) {
 			enforce(socket);
 			sockets ~= socket;
-			log("Adding socket to internal list");
+			logger.warning("Adding socket to internal list");
 		}
 	}
 	
@@ -110,7 +99,7 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 					found = true;
 					break;
 				}
-		}
+			}
 			
 			if(found){
 				if(sockets.length == 1){
@@ -118,7 +107,7 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 				}else{
 					sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
 				}
-				log("Deleted socket from internal list: current = "~to!string(size()));
+				logger.warning("Deleted socket from internal list: current = "~to!string(size()));
 			}
 		}
 	}
@@ -138,16 +127,17 @@ private interface IClientCommandHandler {
 
 private class SocketHandler{
 	private Socket socket;
-
 	private IClientCommandHandler commandHandler;
-	
-	const int bytesToRead = 1024;
+	private ILogger logger;
+	private const int bytesToRead = 1024;
 	
 	public:
 	this(Socket sock, IClientCommandHandler commandHandler){
 		this.socket = sock;
 		this.commandHandler = commandHandler;
 		enforce(commandHandler);
+		LoggerFactory lf = new LoggerFactory();
+		logger = lf.getSimpleLogger();
 	}
 	
 	void send(string msg){
@@ -161,11 +151,14 @@ private class SocketHandler{
 			
 		commandHandler.gotConnected(this);	
 		
+		bool hasReceived = false;
+		
 		while(true){
 			int read;
 			char[] buf = receiveFromSocket(bytesToRead, read);
 			if (Socket.ERROR == read) {
-				log("Connection error.");
+				if(!hasReceived)
+					logger.error("Connection error! Nothing was received!");
 				goto sock_down;
 			} else if (0 == read) {
 				sock_down:
@@ -173,7 +166,9 @@ private class SocketHandler{
 				socket.close();
 				break;
 			} else {
-				commandHandler.handleCommand(this, to!string(buf[0 .. read]));
+				import std.string;
+				hasReceived = true;
+				commandHandler.handleCommand(this, strip(to!string(buf[0 .. read])));
 			}
 		}
 	}
@@ -195,12 +190,14 @@ public class QuickServer {
 	const auto max 	= 120;
 	
 	IClientCommandHandler commandHandler;
-	
-	ICThreadPool threadPool;
+	ICThreadPool threadPool;	
+	ILogger logger;
 	
 	this(string handlerClass){
 		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);
 		enforce(commandHandler);
+		LoggerFactory lf = new LoggerFactory();
+		logger = lf.getSimpleLogger();
 	}
 	
 	void startServer(){
@@ -211,7 +208,7 @@ public class QuickServer {
 		listener.bind(new InternetAddress(chars(host),to!ushort(port)));
 		listener.listen(backlog);
 			
-		log("Listening on port "~to!string(port));
+		logger.info("Listening on port "~to!string(port));
 		
 		SocketSet sset = new SocketSet();
 		sset.add(listener);
@@ -221,7 +218,7 @@ public class QuickServer {
 		
 		do{
 			scope(failure){
-				log("An error occured while accepting. Lets continue.");
+				logger.warning("An error occured while accepting. Lets continue.");
 				continue;
 			}
 			
@@ -236,14 +233,11 @@ public class QuickServer {
 					
 				assert(sn.isAlive);
 				
-				void runHandler(){
-					auto h = new SocketHandler(sn, commandHandler);
-					h.run();
-				}
+				auto h = new SocketHandler(sn, commandHandler);
 				
-				threadPool.append(&runHandler);
+				threadPool.append(&h.run);
 			} else {
-				log("Rejected new socket: "~to!string(commandHandler.size()));
+				logger.warning("Rejected new socket: "~to!string(commandHandler.size()));
 			}
 		}while(true);
 	}
@@ -253,12 +247,4 @@ alias charArr chars;
 
 const(char[]) charArr(string str){
 	return cast(const(char[]))str;
-}
-
-alias logToStdout log;
-
-void logToStdout(string str){
-	synchronized{
-		writeln(str);
-	}
 }

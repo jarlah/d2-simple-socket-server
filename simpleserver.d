@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import std.conv, std.socket, std.stdio, core.thread;
 
-import quickserver;
+import quickserver.server;
 
 int main(char[][] args)
 {
@@ -35,12 +35,12 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	}
 	
 	override void handleCommandImpl(SocketHandler socket, string command){
-		log("Got message: "~command);
+		logger.info("Got message: "~command);
 		socket.send("Hello! You typed: "~command);
 		broadcast("Someone typed: "~command);
 	}
 	
 	override void closingConnectionImpl(SocketHandler socket){
-		log("Closing socket: "~to!string(socket));
+		logger.info("Closing socket: "~to!string(socket));
 	}
 }
