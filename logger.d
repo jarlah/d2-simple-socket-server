@@ -26,8 +26,8 @@ interface ILogger {
 	void info(string msg);
 	void error(string msg);
 	void warning(string msg);
-	void dev(string msg);
-	void critical(string msg);
+	void development(string msg);
+	void fatal(string msg);
 }
 
 class LoggerFactory {
@@ -53,20 +53,20 @@ class SimpleLogger: AbstractLogger{
 }
 
 private enum LogLevel {
-	ALL,
-	INFO,
-	WARNING,
-	ERROR,
-	CRITICAL,
-	DEBUG
+	ALL = 6,
+	DEBUG = 5,
+	INFO = 4,
+	WARN = 3,
+	ERROR = 2,
+	FATAL = 1,
+	OFF = 0
 }
 
 abstract class AbstractLogger: ILogger {
-	string[string] properties;
-	
-	string msgDelimiter;
-	
-	LogLevel logLevel = LogLevel.ALL;
+	private LogLevel[string] properties;
+	private string msgDelimiter;
+	private LogLevel logLevel = LogLevel.ALL;
+	private bool logAll,disableLog;
 
 	this(){
 		scope(failure)
@@ -78,10 +78,11 @@ abstract class AbstractLogger: ILogger {
 			scope(failure)
 				throw new Exception("Malformed property: "~propertyLine);
 			string[] arr = explode(propertyLine,'=');
-			properties[strip(arr[0])]=strip(arr[1]);
+			properties[strip(arr[0])]=to!LogLevel(strip(arr[1]));
 		}
-		int level = to!int(properties["quickserver.logger.level"]);
-		logLevel = cast(LogLevel)level;
+		logLevel = properties["quickserver.logger.level"];
+		logAll = logLevel == LogLevel.ALL;
+		disableLog = logLevel == LogLevel.OFF;
 	}
 	
 	/**
@@ -118,28 +119,32 @@ abstract class AbstractLogger: ILogger {
 		return s;
 	}
 	
-	override void info(string msg){
-		if(logLevel == LogLevel.ALL || logLevel==LogLevel.INFO)
+	private bool shouldLog(LogLevel level){
+		return (!disableLog && (logAll || level <= LogLevel.ERROR));
+	}
+	
+	public override void info(string msg){
+		if(shouldLog(LogLevel.INFO))
 			append(createLogEntry(LogLevel.INFO,msg));
 	}
 	
-	override void error(string msg){
-		if(logLevel == LogLevel.ALL || logLevel == LogLevel.ERROR)
+	public override void error(string msg){
+		if(shouldLog(LogLevel.ERROR))
 			append(createLogEntry(LogLevel.ERROR,msg));
 	}
 	
-	override void warning(string msg){
-		if(logLevel == LogLevel.ALL || logLevel == LogLevel.WARNING)
-			append(createLogEntry(LogLevel.WARNING,msg));
+	public override void warning(string msg){
+		if(shouldLog(LogLevel.WARN))
+			append(createLogEntry(LogLevel.WARN,msg));
 	}
 	
-	override void dev(string msg){
-		if(logLevel == LogLevel.ALL || logLevel == LogLevel.DEBUG)
+	public override void development(string msg){
+		if(shouldLog(LogLevel.DEBUG))
 			append(createLogEntry(LogLevel.DEBUG,msg));
 	}
 	
-	override void critical(string msg){
-		if(logLevel == LogLevel.ALL || logLevel == LogLevel.CRITICAL)
-			append(createLogEntry(LogLevel.CRITICAL,msg));
+	public override void fatal(string msg){
+		if(shouldLog(LogLevel.FATAL))
+			append(createLogEntry(LogLevel.FATAL,msg));
 	}
 }

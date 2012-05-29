@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module quickserver.server;
 
-import std.conv, std.socket, std.stdio, core.thread, std.string;;
+import std.conv, std.socket, std.stdio, core.thread, std.string;
 
 import quickserver.threadpool;
 

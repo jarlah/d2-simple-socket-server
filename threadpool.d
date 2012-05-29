@@ -11,6 +11,8 @@ import core.sync.mutex;
 import core.sync.condition;
 import std.c.time;
 
+import quickserver.logger;
+
 private struct Job
 {
        Job *next;
@@ -62,6 +64,8 @@ class CThreadPool: ICThreadPool
                m_stackSize = sz;
                m_mutex = new Mutex;
                m_cond = new Condition(m_mutex);
+               LoggerFactory lf = new LoggerFactory();
+               logger = lf.getSimpleLogger();
        }
 
        override void append(void function() fn)
@@ -115,6 +119,8 @@ class CThreadPool: ICThreadPool
 	   private:
        enum Call { NO, FN, DG }
 
+	   ILogger logger;
+	   
        Mutex m_mutex;
        Condition m_cond;
        size_t m_stackSize = 0;
@@ -231,7 +237,8 @@ class CThreadPool: ICThreadPool
 
                m_mutex.unlock();
 
-               writefln("Thread(%d) of ThreadPool exit now", pthread_self());
+               logger.development("Thread("~to!string(pthread_self())~") of ThreadPool exit now");
+               
                if (m_onThreadExit != null)
                        m_onThreadExit();
        }
