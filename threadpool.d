@@ -13,15 +13,6 @@ import std.c.time;
 
 import quickserver.logger;
 
-private struct Job
-{
-       Job *next;
-       void function() fn;
-       void delegate() dg;
-       void *arg;
-       int   call;
-}
-
 public interface ICThreadPool {
 	   /**
         * Append one task into the thread pool's task queue
@@ -40,6 +31,15 @@ public interface ICThreadPool {
        in {
 			enforce(dg, "dg is null");
 	   } 
+}
+
+private struct Job
+{
+       Job *next;
+       void function() fn;
+       void delegate() dg;
+       void *arg;
+       int   call;
 }
 
 /**
@@ -64,8 +64,7 @@ class CThreadPool: ICThreadPool
                m_stackSize = sz;
                m_mutex = new Mutex;
                m_cond = new Condition(m_mutex);
-               LoggerFactory lf = new LoggerFactory();
-               logger = lf.getSimpleLogger();
+               logger = getSimpleLogger();
        }
 
        override void append(void function() fn)
@@ -119,7 +118,7 @@ class CThreadPool: ICThreadPool
 	   private:
        enum Call { NO, FN, DG }
 
-	   ILogger logger;
+	   shared ILogger logger;
 	   
        Mutex m_mutex;
        Condition m_cond;

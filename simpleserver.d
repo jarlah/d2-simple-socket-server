@@ -36,11 +36,10 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	
 	override void handleCommandImpl(SocketHandler socket, string command){
 		logger.info("Got message: "~command);
-		socket.send("Hello! You typed: "~command);
-		broadcast("Someone typed: "~command);
+		socket.send(command);
 	}
 	
 	override void closingConnectionImpl(SocketHandler socket){
-		logger.info("Closing socket: "~to!string(socket));
+		logger.info("Closing socket");
 	}
 }

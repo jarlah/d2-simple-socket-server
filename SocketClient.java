@@ -26,7 +26,8 @@ import java.util.*;
 public class SocketClient {
 	public static void main (String args[]) throws Exception{
 		List<Callable<String>> list = new ArrayList<Callable<String>>();
-		for(int i = 0;i<1000;i++){
+		int size = 10;
+		for(int i = 0;i<size;i++){
 			list.add(new Callable<String>(){
 				public String call(){
 					Socket echoSocket = null;
@@ -36,6 +37,7 @@ public class SocketClient {
 					try {
 						echoSocket = new Socket("localhost", 1234);
 						out = new PrintWriter(echoSocket.getOutputStream(), true);
+						in = new BufferedReader(new InputStreamReader(echoSocket.getInputStream()));
 					} catch (UnknownHostException e) {
 						System.err.println("Don't know about host: localhost.");
 						System.exit(1);
@@ -43,28 +45,39 @@ public class SocketClient {
 						System.err.println("Couldn't get I/O for " + "the connection to: localhost.");
 						System.exit(1);
 					}
-					
-					out.println("Hei");
+									
+					out.print("Hei");
 					out.flush();
-					out.close();
+					
+					String string = null;
 					
 					try{
+						System.out.println("Trying to read response");
+						string = in.readLine();
+					}catch(Exception e){
+						System.err.println("Could not read response");
+					}
+					
+					try{
+						out.close();
+						in.close();
 						echoSocket.close();
 					}catch(Exception e){
-						e.printStackTrace();
+						System.err.println("Could not close correctly");
 					}
 						
-					return null;
+					return string;
 				}
 			});
 		}
 		
-		ExecutorService executor = Executors.newFixedThreadPool(1000);
+		ExecutorService executor = Executors.newFixedThreadPool(size);
 		
 		List<Future<String>> result = executor.invokeAll(list);
 		
 		for(Future<String> r: result){
-			r.get();
+			String string = r.get();
+			System.out.println(string);
 		}
 		
 		System.exit(0);

@@ -22,7 +22,7 @@ module quickserver.logger;
 
 import std.conv, std.socket, std.stdio, core.thread, std.datetime, std.file, std.string,std.regex;
 
-interface ILogger {
+shared interface ILogger {
 	void info(string msg);
 	void error(string msg);
 	void warning(string msg);
@@ -30,19 +30,23 @@ interface ILogger {
 	void fatal(string msg);
 }
 
-class LoggerFactory {
-	private static ILogger logger;
-	
-	ILogger getSimpleLogger(){
-		synchronized {
-			if(logger is null)
-				logger = new SimpleLogger();
-			return logger;
+shared(ILogger) getSimpleLogger()
+{
+	static shared ILogger instance;
+
+	if(!instance)
+	{
+		synchronized
+		{
+			if(!instance)
+				instance = new shared(SimpleLogger)();
 		}
 	}
+	
+	return instance;
 }
 
-class SimpleLogger: AbstractLogger{
+shared class SimpleLogger: AbstractLogger{
 	this(){
 		super();
 	}
@@ -62,7 +66,7 @@ private enum LogLevel {
 	OFF = 0
 }
 
-abstract class AbstractLogger: ILogger {
+shared abstract class AbstractLogger: ILogger {
 	private LogLevel[string] properties;
 	private string msgDelimiter;
 	private LogLevel logLevel = LogLevel.ALL;
@@ -83,6 +87,7 @@ abstract class AbstractLogger: ILogger {
 		logLevel = properties["quickserver.logger.level"];
 		logAll = logLevel == LogLevel.ALL;
 		disableLog = logLevel == LogLevel.OFF;
+		writeln("Disable Log: "~to!string(disableLog)~"\t"~"Log All: "~to!string(logAll)~"\t"~"Log level: "~to!string(logLevel));
 	}
 	
 	/**
@@ -120,7 +125,7 @@ abstract class AbstractLogger: ILogger {
 	}
 	
 	private bool shouldLog(LogLevel level){
-		return (!disableLog && (logAll || level <= LogLevel.ERROR));
+		return (!disableLog && (logAll || level <= logLevel));
 	}
 	
 	public override void info(string msg){

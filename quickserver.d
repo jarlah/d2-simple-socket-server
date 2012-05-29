@@ -28,13 +28,12 @@ import quickserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
 	this(){
-		LoggerFactory lf = new LoggerFactory();
-		logger = lf.getSimpleLogger();
+		logger = getSimpleLogger();
 	}
 	
 	SocketHandler[] sockets;
 	
-	ILogger logger;
+	shared ILogger logger;
 	
 	ulong _max = 0;
 	
@@ -66,29 +65,24 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 	void lostConnectionImpl(SocketHandler socket){}
 	
 	void broadcast(string msg){
-		synchronized(this){
-			foreach(SocketHandler socket; sockets){
-				socket.send(msg);
-			}
+		foreach(SocketHandler socket; sockets){
+			socket.send(msg);
 		}
 	}
 	
 	final ulong size(){
-		synchronized(this){
-			return sockets.length;
-		}
+		return sockets.length;
 	}
 	
 	final void add(SocketHandler socket){
-		synchronized(this) {
-			enforce(socket);
+		enforce(socket);
+		synchronized
 			sockets ~= socket;
-			logger.warning("Adding socket to internal list");
-		}
+		logger.warning("Adding socket to internal list");
 	}
 	
 	final void del(SocketHandler socket){
-		synchronized(this) {
+		synchronized{
 			ulong index;
 			
 			bool found = false;
@@ -102,13 +96,12 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 			}
 			
 			if(found){
-				if(sockets.length == 1){
+				if(sockets.length == 1)
 					sockets.clear();
-				}else{
+				else
 					sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
-				}
 				logger.warning("Deleted socket from internal list: current = "~to!string(size()));
-			}
+			}	
 		}
 	}
 }
@@ -128,7 +121,7 @@ private interface IClientCommandHandler {
 private class SocketHandler{
 	private Socket socket;
 	private IClientCommandHandler commandHandler;
-	private ILogger logger;
+	private shared ILogger logger;
 	private const int bytesToRead = 1024;
 	
 	public:
@@ -136,37 +129,47 @@ private class SocketHandler{
 		this.socket = sock;
 		this.commandHandler = commandHandler;
 		enforce(commandHandler);
-		LoggerFactory lf = new LoggerFactory();
-		logger = lf.getSimpleLogger();
+		logger = getSimpleLogger();
 	}
 	
 	void send(string msg){
-		socket.send(msg);
+		import std.ascii;
+		int bytesRead = to!int(socket.send(msg~newline));
+		if(Socket.ERROR == bytesRead){
+			logger.error("An error occured while sending");
+		}else{
+			logger.info("Sent \""~msg~"\" to client");
+		}
 	}
 	
 	private:
-	void run(){
+	void closeConnection(){
 		scope(exit)
 			commandHandler.lostConnection(this);
+		loop = false;
+		socket.close();
+	}
+	
+	bool loop = true;
+	
+	void run(){
+		scope(exit){
+			closeConnection();
+			logger.warning("SocketHandler.run exits");
+		}
 			
 		commandHandler.gotConnected(this);	
 		
-		bool hasReceived = false;
-		
-		while(true){
+		while(loop){
 			int read;
 			char[] buf = receiveFromSocket(bytesToRead, read);
 			if (Socket.ERROR == read) {
-				if(!hasReceived)
-					logger.error("Connection error! Nothing was received!");
-				goto sock_down;
+				logger.warning("Socket.read caught Socket.ERROR");
+				break;
 			} else if (0 == read) {
-				sock_down:
-				commandHandler.closingConnection(this);
-				socket.close();
+				logger.warning("Socket.read caught 0");
 				break;
 			} else {
-				hasReceived = true;
 				commandHandler.handleCommand(this, strip(to!string(buf[0 .. read])));
 			}
 		}
@@ -189,14 +192,15 @@ public class QuickServer {
 	const auto max 	= 120;
 	
 	IClientCommandHandler commandHandler;
+	
 	ICThreadPool threadPool;	
-	ILogger logger;
+	
+	shared ILogger logger;
 	
 	this(string handlerClass){
 		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);
 		enforce(commandHandler);
-		LoggerFactory lf = new LoggerFactory();
-		logger = lf.getSimpleLogger();
+		logger = getSimpleLogger();
 	}
 	
 	void startServer(){
@@ -232,9 +236,12 @@ public class QuickServer {
 					
 				assert(sn.isAlive);
 				
-				auto h = new SocketHandler(sn, commandHandler);
+				void runHandler(){
+					auto h = new SocketHandler(sn, commandHandler);
+					h.run();
+				}
 				
-				threadPool.append(&h.run);
+				threadPool.append(&runHandler);
 			} else {
 				logger.warning("Rejected new socket: "~to!string(commandHandler.size()));
 			}
