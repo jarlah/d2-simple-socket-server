@@ -22,8 +22,6 @@ module quickserver.server;
 
 import std.conv, std.socket, std.stdio, core.thread, std.string, std.ascii;
 
-import quickserver.threadpool;
-
 import quickserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
@@ -89,16 +87,14 @@ private class SocketHandler{
 }
 
 public class QuickServer {
+	auto MAX 		= 120;
 	auto host 		= "localhost";
 	auto port 		= 1234;
 	auto name 		= "QuickServer";
 	auto blocking 	= false;
 	auto backlog 	= 60;
-	const auto MAX_CONNECTIONS 	= 120;
 	
 	IClientCommandHandler commandHandler;
-	
-	ICThreadPool threadPool;	
 	
 	shared ILogger logger;
 	
@@ -117,11 +113,8 @@ public class QuickServer {
 		listener.listen(backlog);
 			
 		logger.info("Listening on port "~to!string(port));
-
-		threadPool = new CThreadPool(MAX_CONNECTIONS,600,backlog);
 		
-		SocketSet sset = new SocketSet(MAX_CONNECTIONS+1);
-		
+		SocketSet sset = new SocketSet(MAX+1);
 		Socket[] reads;
 		
 		for (;; sset.reset())
@@ -193,7 +186,7 @@ public class QuickServer {
 				Socket sn;
 				try
 				{
-					if (reads.length < MAX_CONNECTIONS)
+					if (reads.length < MAX)
 					{
 						sn = listener.accept();
 						logger.info("Connection from "~to!string(sn.remoteAddress().toString())~" established.");

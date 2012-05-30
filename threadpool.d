@@ -13,7 +13,11 @@ import std.c.time;
 
 import quickserver.logger;
 
-public interface ICThreadPool {
+void main(char[][] arr){
+
+}
+
+deprecated public interface ICThreadPool {
 	   /**
         * Append one task into the thread pool's task queue
         * @param fn {void function()}
