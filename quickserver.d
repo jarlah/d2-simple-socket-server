@@ -27,11 +27,11 @@ import quickserver.threadpool;
 import quickserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
+	shared ILogger logger;
+	
 	this(){
 		logger = getSimpleLogger();
 	}
-	
-	shared ILogger logger;
 	
 	final void handleCommand(SocketHandler socket, string command){
 		handleCommandImpl(socket,command);
@@ -74,8 +74,8 @@ private class SocketHandler{
 	
 	public:
 	this(Socket sock){
-		this.socket = sock;
-		this.logger = getSimpleLogger();
+		socket = sock;
+		logger = getSimpleLogger();
 	}
 	
 	void send(string msg){
@@ -196,16 +196,16 @@ public class QuickServer {
 					if (reads.length < MAX_CONNECTIONS)
 					{
 						sn = listener.accept();
-						writefln("Connection from %s established.", sn.remoteAddress().toString());
+						logger.info("Connection from "~to!string(sn.remoteAddress().toString())~" established.");
 						assert(sn.isAlive);
 						assert(listener.isAlive);
 						reads ~= sn;
-						writefln("\tTotal connections: %d", reads.length);
+						logger.info("\tTotal connections: "~to!string(reads.length));
 					}
 					else
 					{
 						sn = listener.accept();
-						writefln("Rejected connection from %s; too many connections.", sn.remoteAddress().toString());
+						logger.info("Rejected connection from "~to!string(sn.remoteAddress().toString())~"; too many connections.");
 						assert(sn.isAlive);
 						sn.close();
 						assert(!sn.isAlive);
@@ -214,7 +214,7 @@ public class QuickServer {
 				}
 				catch (Exception e)
 				{
-					writefln("Error accepting: %s", e.toString());
+					logger.error("Error accepting: "~e.toString());
 					if (sn)
 						sn.close();
 				}
