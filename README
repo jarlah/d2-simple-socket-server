@@ -1,13 +1,17 @@
-compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
-
-Tested with the SocketClient class, that spawns 1000 concurrent threads.
-
-Single threaded and non-blocking. Stateless command handler, protocol must define state.
-
-Should be easily compatible with Windows or any other dmd2 compiler.
-
 This software is licensed under the GPL v2 license.
 
-Compile the example server simpleserver by running the shell script simpleserver.sh.
+compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
 
-From there execute the generated binary simpleserver in your preferred command line.
+Tested with the SocketClient class, that spawns a given number of concurrent threads.
+
+Single threaded and non-blocking. Stateless command handler: protocol must define state.
+
+Linux/Unix:
+
+Execute the shell script simpleserver.sh
+
+Windows:
+
+Execute the bat script simpleserver.bat
+
+Enjoy!
