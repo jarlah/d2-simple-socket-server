@@ -26,7 +26,7 @@ import java.util.*;
 public class SocketClient {
 	public static void main (String args[]) throws Exception{
 		List<Callable<String>> list = new ArrayList<Callable<String>>();
-		int size = 10;
+		int size = 100;
 		for(int i = 0;i<size;i++){
 			list.add(new Callable<String>(){
 				public String call(){

@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module quickserver.server;
 
-import std.conv, std.socket, std.stdio, core.thread, std.string;
+import std.conv, std.socket, std.stdio, core.thread, std.string, std.ascii;
 
 import quickserver.threadpool;
 
@@ -31,11 +31,7 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 		logger = getSimpleLogger();
 	}
 	
-	SocketHandler[] sockets;
-	
 	shared ILogger logger;
-	
-	ulong _max = 0;
 	
 	final void handleCommand(SocketHandler socket, string command){
 		handleCommandImpl(socket,command);
@@ -43,7 +39,6 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 	void handleCommandImpl(SocketHandler socket, string commandHandler){}
 	
 	final void gotConnected(SocketHandler socket){
-		add(socket);
 		gotConnectedImpl(socket);
 	};
 	void gotConnectedImpl(SocketHandler socket){}
@@ -59,58 +54,12 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 	void closingConnectionImpl(SocketHandler socket){}
 	
 	final void lostConnection(SocketHandler socket){
-		del(socket);
 		lostConnectionImpl(socket);
 	};
 	void lostConnectionImpl(SocketHandler socket){}
-	
-	void broadcast(string msg){
-		foreach(SocketHandler socket; sockets){
-			socket.send(msg);
-		}
-	}
-	
-	final ulong size(){
-		return sockets.length;
-	}
-	
-	final void add(SocketHandler socket){
-		enforce(socket);
-		synchronized
-			sockets ~= socket;
-		logger.warning("Adding socket to internal list");
-	}
-	
-	final void del(SocketHandler socket){
-		synchronized{
-			ulong index;
-			
-			bool found = false;
-			
-			foreach(int i, SocketHandler sh; sockets){
-				if(sh == socket){
-					index = i;
-					found = true;
-					break;
-				}
-			}
-			
-			if(found){
-				if(sockets.length == 1)
-					sockets.clear();
-				else
-					sockets = sockets[0 .. index] ~ sockets[index + 1 .. sockets.length];
-				logger.warning("Deleted socket from internal list: current = "~to!string(size()));
-			}	
-		}
-	}
 }
 
 private interface IClientCommandHandler {
-	ulong size();
-	void add(SocketHandler socket);
-	void del(SocketHandler socket);
-	void broadcast(string msg);
 	void gotConnected(SocketHandler handler);
 	void gotRejected(Socket socket);
 	void closingConnection(SocketHandler handler);
@@ -120,20 +69,16 @@ private interface IClientCommandHandler {
 
 private class SocketHandler{
 	private Socket socket;
-	private IClientCommandHandler commandHandler;
 	private shared ILogger logger;
-	private const int bytesToRead = 1024;
+	
 	
 	public:
-	this(Socket sock, IClientCommandHandler commandHandler){
+	this(Socket sock){
 		this.socket = sock;
-		this.commandHandler = commandHandler;
-		enforce(commandHandler);
-		logger = getSimpleLogger();
+		this.logger = getSimpleLogger();
 	}
 	
 	void send(string msg){
-		import std.ascii;
 		int bytesRead = to!int(socket.send(msg~newline));
 		if(Socket.ERROR == bytesRead){
 			logger.error("An error occured while sending");
@@ -141,55 +86,15 @@ private class SocketHandler{
 			logger.info("Sent \""~msg~"\" to client");
 		}
 	}
-	
-	private:
-	void closeConnection(){
-		scope(exit)
-			commandHandler.lostConnection(this);
-		loop = false;
-		socket.close();
-	}
-	
-	bool loop = true;
-	
-	void run(){
-		scope(exit){
-			closeConnection();
-			logger.warning("SocketHandler.run exits");
-		}
-			
-		commandHandler.gotConnected(this);	
-		
-		while(loop){
-			int read;
-			char[] buf = receiveFromSocket(bytesToRead, read);
-			if (Socket.ERROR == read) {
-				logger.warning("Socket.read caught Socket.ERROR");
-				break;
-			} else if (0 == read) {
-				logger.warning("Socket.read caught 0");
-				break;
-			} else {
-				commandHandler.handleCommand(this, strip(to!string(buf[0 .. read])));
-			}
-		}
-	}
-	
-	char[] receiveFromSocket(uint numBytes, ref int readBytes)
-	{
-		char[] buf = new char[numBytes];
-		readBytes = to!int(socket.receive(buf));
-		return buf;
-	}
 }
 
 public class QuickServer {
 	auto host 		= "localhost";
 	auto port 		= 1234;
 	auto name 		= "QuickServer";
-	auto blocking 	= true;
+	auto blocking 	= false;
 	auto backlog 	= 60;
-	const auto max 	= 120;
+	const auto MAX_CONNECTIONS 	= 120;
 	
 	IClientCommandHandler commandHandler;
 	
@@ -212,40 +117,109 @@ public class QuickServer {
 		listener.listen(backlog);
 			
 		logger.info("Listening on port "~to!string(port));
+
+		threadPool = new CThreadPool(MAX_CONNECTIONS,600,backlog);
 		
-		SocketSet sset = new SocketSet();
-		sset.add(listener);
+		SocketSet sset = new SocketSet(MAX_CONNECTIONS+1);
 		
-		// Do not initialize this in the constructor because we want updated values for max and backlog
-		threadPool = new CThreadPool(max,600,backlog);
+		Socket[] reads;
 		
-		do{
-			scope(failure){
-				logger.warning("An error occured while accepting. Lets continue.");
-				continue;
+		for (;; sset.reset())
+		{
+			sset.add(listener);
+
+			foreach (Socket each; reads)
+			{
+				sset.add(each);
 			}
 			
 			Socket.select(sset,null,null);
 			
-			if (commandHandler.size() < max)
+			int i;
+
+			for (i = 0;; i++)
 			{
-				Socket sn = listener.accept();
-				
-				if(sn is null)
-					continue;
+				next:
+				if (i == reads.length)
+					break;
 					
-				assert(sn.isAlive);
-				
-				void runHandler(){
-					auto h = new SocketHandler(sn, commandHandler);
-					h.run();
+				if (sset.isSet(reads[i]))
+				{
+					char[1024] buf;
+					int read = to!int(reads[i].receive(buf));
+
+					if (Socket.ERROR == read)
+					{
+						logger.warning("Connection error.");
+						goto sock_down;
+					}
+					else if (0 == read)
+					{
+						try
+						{
+							// if the connection closed due to an error, remoteAddress() could fail
+							logger.warning("Connection from "~reads[i].remoteAddress().toString()~" closed.");
+						}
+						catch (SocketException)
+						{
+							logger.warning("Connection closed.");
+						}
+
+						sock_down:
+						reads[i].close(); // release socket resources now
+						
+						// remove from -reads-
+						if (i != reads.length - 1)
+							reads[i] = reads[reads.length - 1];
+
+						reads = reads[0 .. reads.length - 1];
+
+						logger.info("\tTotal connections: "~to!string(reads.length));
+
+						goto next; // -i- is still the next index
+					} 
+					else
+					{
+						auto command = buf[0 .. read];
+						auto address = to!string(reads[i].remoteAddress().toString());
+						logger.info(to!string("Received "~to!string(read)~"bytes  from "~address~": \""~command~"\""));
+						commandHandler.handleCommand(new SocketHandler(reads[i]), to!string(command));
+					}
 				}
-				
-				threadPool.append(&runHandler);
-			} else {
-				logger.warning("Rejected new socket: "~to!string(commandHandler.size()));
 			}
-		}while(true);
+			
+			if (sset.isSet(listener)) // connection request
+			{
+				Socket sn;
+				try
+				{
+					if (reads.length < MAX_CONNECTIONS)
+					{
+						sn = listener.accept();
+						writefln("Connection from %s established.", sn.remoteAddress().toString());
+						assert(sn.isAlive);
+						assert(listener.isAlive);
+						reads ~= sn;
+						writefln("\tTotal connections: %d", reads.length);
+					}
+					else
+					{
+						sn = listener.accept();
+						writefln("Rejected connection from %s; too many connections.", sn.remoteAddress().toString());
+						assert(sn.isAlive);
+						sn.close();
+						assert(!sn.isAlive);
+						assert(listener.isAlive);
+					}
+				}
+				catch (Exception e)
+				{
+					writefln("Error accepting: %s", e.toString());
+					if (sn)
+						sn.close();
+				}
+			}
+		}
 	}
 }
 
