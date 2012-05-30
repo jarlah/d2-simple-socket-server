@@ -66,9 +66,9 @@ private interface IClientCommandHandler {
 }
 
 private class SocketHandler{
-	private Socket socket;
 	private shared ILogger logger;
-	
+	private Socket socket;
+	private const int readNumBytes = 1024;
 	
 	public:
 	this(Socket sock){
@@ -83,6 +83,19 @@ private class SocketHandler{
 		}else{
 			logger.info("Sent \""~msg~"\" to client");
 		}
+	}
+	
+	int read(ref char[] buf){
+		buf = new char[readNumBytes];
+		return to!int(socket.receive(buf));
+	}
+	
+	string remoteAddress(){
+		return to!string(socket.remoteAddress().toString());
+	}
+	
+	string localAddress(){
+		return to!string(socket.localAddress().toString());
 	}
 }
 
@@ -138,12 +151,15 @@ public class QuickServer {
 					
 				if (sset.isSet(reads[i]))
 				{
-					char[1024] buf;
-					int read = to!int(reads[i].receive(buf));
+					auto handler = new SocketHandler(reads[i]);
+					
+					char[] buf;
+					
+					int read = handler.read(buf);
 
 					if (Socket.ERROR == read)
 					{
-						logger.warning("Connection error.");
+						logger.error("Connection error.");
 						goto sock_down;
 					}
 					else if (0 == read)
@@ -174,9 +190,9 @@ public class QuickServer {
 					else
 					{
 						auto command = buf[0 .. read];
-						auto address = to!string(reads[i].remoteAddress().toString());
+						auto address = handler.remoteAddress();
 						logger.info(to!string("Received "~to!string(read)~"bytes  from "~address~": \""~command~"\""));
-						commandHandler.handleCommand(new SocketHandler(reads[i]), to!string(command));
+						commandHandler.handleCommand(handler, to!string(command));
 					}
 				}
 			}
