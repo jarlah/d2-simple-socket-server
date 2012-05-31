@@ -65,6 +65,14 @@ private interface IClientCommandHandler {
 	void handleCommand(ISocketHandler handler, string command);
 }
 
+class DefaultSocketHandler: AbstractSocketHandler {
+	this(){}
+	
+	int readSize(){
+		return 1024;
+	}
+}
+
 public abstract class AbstractSocketHandler: ISocketHandler {
 	Socket socket;
 	ILogger logger;
@@ -127,7 +135,7 @@ public class QuickServer {
 	
 	ILogger logger;
 	
-	string handlerClass;
+	string handlerClass = "quickserver.server.DefaultSocketHandler";
 	
 	this(string handlerClass){
 		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);
@@ -224,7 +232,7 @@ public class QuickServer {
 						sn = listener.accept();
 						assert(sn.isAlive);
 						assert(listener.isAlive);
-						logger.info("Initializing socket handler");
+						logger.info("Initializing socket handler: "~handlerClass);
 						ISocketHandler handler = cast(ISocketHandler)Object.factory(handlerClass);
 						handler.setup(sn);
 						logger.info("Connection from "~handler.remoteAddress~" established.");
