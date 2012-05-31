@@ -31,49 +31,49 @@ class AbstractClientCommandHandler: IClientCommandHandler {
 		logger = getSimpleLogger();
 	}
 	
-	final void handleCommand(SocketHandler socket, string command){
+	final void handleCommand(ISocketHandler socket, string command){
 		handleCommandImpl(socket,command);
 	};
-	void handleCommandImpl(SocketHandler socket, string commandHandler){}
+	void handleCommandImpl(ISocketHandler socket, string commandHandler){}
 	
-	final void gotConnected(SocketHandler socket){
+	final void gotConnected(ISocketHandler socket){
 		gotConnectedImpl(socket);
 	};
-	void gotConnectedImpl(SocketHandler socket){}
+	void gotConnectedImpl(ISocketHandler socket){}
 	
 	final void gotRejected(Socket socket){
 		gotRejectedImpl(socket);
 	};
 	void gotRejectedImpl(Socket socket){}
 	
-	final void closingConnection(SocketHandler socket){
+	final void closingConnection(ISocketHandler socket){
 		closingConnectionImpl(socket);
 	};
-	void closingConnectionImpl(SocketHandler socket){}
+	void closingConnectionImpl(ISocketHandler socket){}
 	
-	final void lostConnection(SocketHandler socket){
+	final void lostConnection(ISocketHandler socket){
 		lostConnectionImpl(socket);
 	};
-	void lostConnectionImpl(SocketHandler socket){}
+	void lostConnectionImpl(ISocketHandler socket){}
 }
 
 private interface IClientCommandHandler {
-	void gotConnected(SocketHandler handler);
+	void gotConnected(ISocketHandler handler);
 	void gotRejected(Socket socket);
-	void closingConnection(SocketHandler handler);
-	void lostConnection(SocketHandler handler);
-	void handleCommand(SocketHandler handler, string command);
+	void closingConnection(ISocketHandler handler);
+	void lostConnection(ISocketHandler handler);
+	void handleCommand(ISocketHandler handler, string command);
 }
 
-private class SocketHandler{
-	private ILogger logger;
-	private Socket socket;
-	private const int readNumBytes = 1024;
+public abstract class AbstractSocketHandler: ISocketHandler {
+	Socket socket;
+	ILogger logger;
 	
-	public:
-	this(Socket sock){
-		socket = sock;
-		logger = getSimpleLogger();
+	this(){}
+	
+	void setup(Socket sock){
+		this.socket = sock;
+		this.logger = getSimpleLogger();
 	}
 	
 	void send(string msg){
@@ -86,7 +86,7 @@ private class SocketHandler{
 	}
 	
 	int read(ref char[] buf){
-		buf = new char[readNumBytes];
+		buf = new char[readSize()];
 		return to!int(socket.receive(buf));
 	}
 	
@@ -97,6 +97,20 @@ private class SocketHandler{
 	string localAddress(){
 		return to!string(socket.localAddress().toString());
 	}
+	
+	void close(){
+		socket.close();
+	}
+}
+
+public interface ISocketHandler {
+	void send(string msg);
+	int read(ref char[] buf);
+	string remoteAddress();
+	string localAddress();
+	void close();
+	int readSize();
+	void setup(Socket socket);
 }
 
 public class QuickServer {
@@ -109,12 +123,20 @@ public class QuickServer {
 	
 	IClientCommandHandler commandHandler;
 	
+	ISocketHandler[Socket] handlers;
+	
 	ILogger logger;
+	
+	string handlerClass;
 	
 	this(string handlerClass){
 		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);
 		enforce(commandHandler);
 		logger = getSimpleLogger();
+	}
+	
+	void setSocketHandlerClass(string name){
+		handlerClass = name;
 	}
 	
 	void startServer(){
@@ -128,13 +150,12 @@ public class QuickServer {
 		logger.info("Listening on port "~to!string(port));
 		
 		SocketSet sset = new SocketSet(MAX+1);
-		Socket[] reads;
 		
 		for (;; sset.reset())
 		{
 			sset.add(listener);
 
-			foreach (Socket each; reads)
+			foreach (Socket each; handlers.keys)
 			{
 				sset.add(each);
 			}
@@ -146,12 +167,16 @@ public class QuickServer {
 			for (i = 0;; i++)
 			{
 				next:
-				if (i == reads.length)
+				if (i == handlers.length)
 					break;
 					
-				if (sset.isSet(reads[i]))
+				auto sock = handlers.keys[i];
+				
+				if (sset.isSet(sock))
 				{
-					auto handler = new SocketHandler(reads[i]);
+					auto handler = handlers[sock];
+					
+					enforce(handler);
 					
 					char[] buf;
 					
@@ -166,8 +191,7 @@ public class QuickServer {
 					{
 						try
 						{
-							// if the connection closed due to an error, remoteAddress() could fail
-							logger.warning("Connection from "~reads[i].remoteAddress().toString()~" closed.");
+							logger.warning("Connection from "~handler.remoteAddress()~" closed.");
 						}
 						catch (SocketException)
 						{
@@ -175,17 +199,10 @@ public class QuickServer {
 						}
 
 						sock_down:
-						reads[i].close(); // release socket resources now
-						
-						// remove from -reads-
-						if (i != reads.length - 1)
-							reads[i] = reads[reads.length - 1];
-
-						reads = reads[0 .. reads.length - 1];
-
-						logger.info("\tTotal connections: "~to!string(reads.length));
-
-						goto next; // -i- is still the next index
+						handler.close();
+						handlers.remove(sock);
+						logger.info("\tTotal connections: "~to!string(handlers.length));
+						goto next;
 					} 
 					else
 					{
@@ -197,19 +214,22 @@ public class QuickServer {
 				}
 			}
 			
-			if (sset.isSet(listener)) // connection request
+			if (sset.isSet(listener))
 			{
 				Socket sn;
 				try
 				{
-					if (reads.length < MAX)
+					if (handlers.length < MAX)
 					{
 						sn = listener.accept();
-						logger.info("Connection from "~to!string(sn.remoteAddress().toString())~" established.");
 						assert(sn.isAlive);
 						assert(listener.isAlive);
-						reads ~= sn;
-						logger.info("\tTotal connections: "~to!string(reads.length));
+						logger.info("Initializing socket handler");
+						ISocketHandler handler = cast(ISocketHandler)Object.factory(handlerClass);
+						handler.setup(sn);
+						logger.info("Connection from "~handler.remoteAddress~" established.");
+						handlers[sn] = handler;
+						logger.info("\tTotal connections: "~to!string(handlers.length));
 					}
 					else
 					{

@@ -25,8 +25,23 @@ import quickserver.server;
 int main(char[][] args)
 {
 	QuickServer server =  new QuickServer("simpleserver.SimpleClientCommandHandler");
+	server.setSocketHandlerClass("simpleserver.SimpleSocketHandler");
 	server.startServer();
 	return 0;
+}
+
+class SimpleSocketHandler: AbstractSocketHandler {
+	this(){}
+	
+	int readSize(){
+		return 1024;
+	}
+	
+	override void send(string msg){
+		logger.info("Overriding echo send");
+		super.send("Overridden: "~msg);
+		
+	}
 }
 
 class SimpleClientCommandHandler: AbstractClientCommandHandler {
@@ -34,12 +49,12 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 		super();
 	}
 	
-	override void handleCommandImpl(SocketHandler socket, string command){
+	override void handleCommandImpl(ISocketHandler socket, string command){
 		logger.info("Got message: "~command);
 		socket.send(command);
 	}
 	
-	override void closingConnectionImpl(SocketHandler socket){
+	override void closingConnectionImpl(ISocketHandler socket){
 		logger.info("Closing socket");
 	}
 }
