@@ -25,7 +25,7 @@ import std.conv, std.socket, std.stdio, core.thread, std.string, std.ascii;
 import quickserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
-	shared ILogger logger;
+	ILogger logger;
 	
 	this(){
 		logger = getSimpleLogger();
@@ -66,7 +66,7 @@ private interface IClientCommandHandler {
 }
 
 private class SocketHandler{
-	private shared ILogger logger;
+	private ILogger logger;
 	private Socket socket;
 	private const int readNumBytes = 1024;
 	
@@ -109,7 +109,7 @@ public class QuickServer {
 	
 	IClientCommandHandler commandHandler;
 	
-	shared ILogger logger;
+	ILogger logger;
 	
 	this(string handlerClass){
 		commandHandler = cast(IClientCommandHandler) Object.factory(handlerClass);

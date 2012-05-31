@@ -22,7 +22,7 @@ module quickserver.logger;
 
 import std.conv, std.socket, std.stdio, core.thread, std.datetime, std.file, std.string,std.regex;
 
-shared interface ILogger {
+interface ILogger {
 	void info(string msg);
 	void error(string msg);
 	void warning(string msg);
@@ -30,23 +30,23 @@ shared interface ILogger {
 	void fatal(string msg);
 }
 
-shared(ILogger) getSimpleLogger()
+ILogger getSimpleLogger()
 {
-	static shared ILogger instance;
+	static ILogger instance;
 
 	if(!instance)
 	{
 		synchronized
 		{
 			if(!instance)
-				instance = new shared(SimpleLogger)();
+				instance = new SimpleLogger();
 		}
 	}
 	
 	return instance;
 }
 
-shared class SimpleLogger: AbstractLogger{
+class SimpleLogger: AbstractLogger{
 	this(){
 		super();
 	}
@@ -66,7 +66,7 @@ private enum LogLevel {
 	OFF = 0
 }
 
-shared abstract class AbstractLogger: ILogger {
+abstract class AbstractLogger: ILogger {
 	private LogLevel[string] properties;
 	private string msgDelimiter;
 	private LogLevel logLevel = LogLevel.ALL;
