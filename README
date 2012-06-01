@@ -6,12 +6,21 @@ Tested with the SocketClient class, that spawns a given number of concurrent thr
 
 Single threaded and non-blocking. Stateless command handler: protocol must define state.
 
-Linux/Unix:
+HOWTO:
 
-Execute the shell script simpleserver.sh
+Linux/Unix/Windows:
 
-Windows:
+Install DDT for Eclipse. Execute the generated executable from the project directory like:
 
-Execute the bat script simpleserver.bat
+~/d2-simple-socket-server$ bin/QuickServer 
+Disable Log: false	Log All: true	Log level: ALL
+2012-06-01T18:15:23.5954827Z INFO: Listening on port 1234
 
-Enjoy!
+This will load the logger properties file in the project directory. If you decide to move the executable, and forget about the logger.properties file it will set LogLevel to ALL by default like this:
+
+~/d2-simple-socket-server$ bin/QuickServer 
+Failed in AbstractLogger constructor.
+Falling back to LogLevel.ALL.
+To override the log level you'll have to add a logger.properties file in the current directory, that you fill with the property "quickserver.logger.level=INFO"
+2012-06-01T18:18:07.4504363Z INFO: Listening on port 1234
+
