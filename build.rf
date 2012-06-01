@@ -1,0 +1,9 @@
+-od"bin"
+-of"bin/QuickServer"
+
+-I"src"
+
+"src/quickserver/logger.d"
+"src/quickserver/server.d"
+"src/simpleserver.d"
+
