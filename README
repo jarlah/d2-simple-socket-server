@@ -2,9 +2,9 @@ This software is licensed under the GPL v2 license.
 
 compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
 
-Tested with the SocketClient class, that spawns a given number of concurrent threads.
+Tested by attacking the service with many multiple concurrent requests that in turn ensures less propability for deadlocks.
 
-Single threaded and non-blocking. Stateless command handler: protocol must define state.
+Single threaded and non-blocking. Supports many thousands of concurrent requests at any given time. 
 
 HOWTO:
 
