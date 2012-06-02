@@ -91,23 +91,19 @@ abstract class AbstractSocketHandler: ISocketHandler {
 }
 
 interface ISocketHandler {
-	void send(string msg);
-	string readLine();
-	string remoteAddress();
-	string localAddress();
-	void setup(Socket socket, ClientData clientData);
-	Socket getSocket();
+	void 	send(string msg);
+	string 	readLine();
+	string 	remoteAddress();
+	string 	localAddress();
+	void 	setup(Socket socket, ClientData cd);
+	Socket 	getSocket();
 	ClientData getClientData();
-	void close();
+	void 	close();
 }
 
-interface ClientData {
-	
-}
+interface ClientData {}
 
-interface Authenticator {
-	bool askAuthorisation(ISocketHandler handler);
-}
+interface Authenticator { bool askAuthorisation(ISocketHandler handler); }
 
 abstract class QuickAuthenticator: Authenticator {	
 	string askStringInput(ISocketHandler clientHandler, string prompt){
@@ -126,64 +122,30 @@ abstract class QuickAuthenticator: Authenticator {
 }
 
 class QuickServer {
-	auto MAX 		= 120;
-	auto host 		= "localhost";
-	auto port 		= 1234;
-	auto name 		= "QuickServer";
-	auto blocking 	= false;
-	auto backlog 	= 60;
-	
+	private:
+	// Settings
+	int MAX = 120;
+	string host = "localhost";
+	int port = 1234;
+	string name = "QuickServer";
+	bool blocking = false;
+	int backlog = 60;
+	string socketHandlerClass = "quickserver.server.DefaultSocketHandler";
+	string commandHandlerClass = null;
+	string authHandlerClass = null;
+	string clientDataClass = null;
 	IClientCommandHandler commandHandler = null;
-	
 	ISocketHandler[Socket] handlers;
-	
+	Authenticator authHandler = null;
 	ILogger logger = null;
 	
-	Authenticator authHandler = null;
-	
-	string socketHandlerClass = "quickserver.server.DefaultSocketHandler";
-	
-	string commandHandlerClass = null;
-	
-	string authHandlerClass = null;
-	
-	string clientDataClass = null;
-	
+	public:
 	this(){
 		logger = getSimpleLogger();
 	}
 	
-	void setCommandHandler(string handlerClass)
-	in{
-		enforce("Command handler class cannot be null",handlerClass);
-	}body{
-		
-		commandHandlerClass = handlerClass;
-	}
-	
-	void setSocketHandler(string handlerClass)
-	in{
-		enforce("Socket handler class cannot be null",handlerClass);
-	}body{
-		socketHandlerClass = handlerClass;
-	}
-	
-	void setAuthenticator(string handlerClass)
-	in{
-		enforce("Authenticator class cannot be null",handlerClass);
-	}body{
-		authHandlerClass = handlerClass;
-	}
-	
-	void setClientData(string clientData)
-	in{
-		enforce("Client data class cannot be null",clientData);
-	}body{
-		clientDataClass = clientData;
-	}
-	
 	void startServer(){
-		logger.info("Starting "~name~"."); 
+		logger.info("Starting "~name); 
 		
 		enforce(commandHandlerClass);
 		logger.info("Loading handler class "~commandHandlerClass);
@@ -200,7 +162,7 @@ class QuickServer {
 		assert(listener.isAlive);
 		
 		listener.blocking = blocking;
-		listener.bind(new InternetAddress(chars(host),to!ushort(port)));
+		listener.bind(new InternetAddress(cast(const(char[]))host,to!ushort(port)));
 		listener.listen(backlog);
 			
 		logger.info("Listening on port "~to!string(port));
@@ -290,6 +252,8 @@ class QuickServer {
 						
 						logger.info("Connection from "~handler.remoteAddress()~" established.");
 						
+						commandHandler.gotConnected(handler);
+						
 						handlers[sn] = handler;
 						
 						logger.info("\tTotal connections: "~to!string(handlers.length));
@@ -297,12 +261,19 @@ class QuickServer {
 					else
 					{
 						sn = listener.accept();
-						logger.info("Rejected connection from "~to!string(sn.remoteAddress().toString())~"; too many connections.");
+						
+						string address = to!string(sn.remoteAddress().toString());
+												
 						assert(sn.isAlive);
+						
+						commandHandler.gotRejected(sn);
+						
 						close:
 						sn.close();
 						assert(!sn.isAlive);
 						assert(listener.isAlive);
+						
+						logger.info("Rejected connection from "~address~"; too many connections.");
 					}
 				}
 				catch (Exception e)
@@ -315,7 +286,77 @@ class QuickServer {
 		}
 	}
 	
-	void closeSocket(ISocketHandler handler){
+	void setCommandHandler(string handlerClass)
+	in{
+		enforce("Command handler class cannot be null",handlerClass);
+	}body{
+		this.commandHandlerClass = handlerClass;
+	}
+	
+	void setSocketHandler(string handlerClass)
+	in{
+		enforce("Socket handler class cannot be null",handlerClass);
+	}body{
+		this.socketHandlerClass = handlerClass;
+	}
+	
+	void setAuthenticator(string handlerClass)
+	in{
+		enforce("Authenticator class cannot be null",handlerClass);
+	}body{
+		this.authHandlerClass = handlerClass;
+	}
+	
+	void setName(string name)
+	in{
+		enforce("Name cannot be null",name);
+	}body{
+		this.name = name;
+	}
+	
+	void setClientData(string clientData)
+	in{
+		enforce("Client data class cannot be null",clientData);
+	}body{
+		this.clientDataClass = clientData;
+	}
+	
+	void setPort(int port)
+	in{
+		assert(port>0&&port<65535,"Port > 0 and < 65535");
+	}body{
+		this.port = port;
+	}
+	
+	void setHost(string host)
+	in{
+		enforce("Host cannot be null",host);
+	}body{
+		this.host = host;
+	}
+	
+	void setMax(int max)
+	in{
+		assert(max>1, "Max be larger than 0");
+	}body{
+		this.MAX = max;
+	}
+	
+	void setBacklog(int bl)
+	in{
+		assert(bl>1, "Backlog be larger than 0");
+	}body{
+		this.backlog = bl;
+	}
+	
+	void setBlocking(bool boolean)
+	{
+		this.blocking = boolean;
+	}
+	
+	private void closeSocket(ISocketHandler handler){
+		commandHandler.closingConnection(handler);
+		
 		try
 		{
 			logger.warning("Connection from "~handler.remoteAddress()~" closed.");
@@ -324,14 +365,12 @@ class QuickServer {
 		{
 			logger.warning("Connection closed.");
 		}
+		
 		handler.close();
 		handlers.remove(handler.getSocket);
+		
 		logger.info("\tTotal connections: "~to!string(handlers.length));
+		
+		commandHandler.lostConnection(handler);
 	}
-}
-
-alias charArr chars;
-
-const(char[]) charArr(string str){
-	return cast(const(char[]))str;
 }

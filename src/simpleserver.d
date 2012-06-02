@@ -29,7 +29,9 @@ int main(char[][] args)
 	server.setAuthenticator("simpleserver.DummyAuthenticator");
 	server.setSocketHandler("quickserver.server.DefaultSocketHandler");
 	server.setClientData("simpleserver.MyClientData");
-	server.port = 8080;
+	server.setPort(8080);
+	server.setHost("localhost");
+	server.setName("SimpleServer v1.0");
 	server.startServer();
 	return 0;
 }
@@ -71,5 +73,9 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	
 	override void closingConnection(ISocketHandler socket){
 		logger.info("Closing socket");
+	}
+	
+	override void lostConnection(ISocketHandler socket){
+		logger.info("Hey I lost my connection");
 	}
 }
