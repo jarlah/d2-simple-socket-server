@@ -24,23 +24,37 @@ import quickserver.server;
 
 int main(char[][] args)
 {
-	QuickServer server =  new QuickServer("simpleserver.SimpleClientCommandHandler");
-	server.setSocketHandlerClass("simpleserver.SimpleSocketHandler");
+	QuickServer server =  new QuickServer();
+	server.setCommandHandler("simpleserver.SimpleClientCommandHandler");
+	server.setAuthenticator("simpleserver.DummyAuthenticator");
+	server.setSocketHandler("quickserver.server.DefaultSocketHandler");
+	server.setClientData("simpleserver.MyClientData");
+	server.port = 8080;
 	server.startServer();
 	return 0;
 }
 
-class SimpleSocketHandler: AbstractSocketHandler {
-	this(){}
-	
-	int readSize(){
-		return 1024;
-	}
-	
-	override void send(string msg){
-		logger.info("Overriding echo send");
-		super.send("Overridden: "~msg);
-		
+class MyClientData: ClientData {
+	string username;
+}
+
+class DummyAuthenticator: QuickAuthenticator {
+	bool askAuthorisation(ISocketHandler clientHandler){
+		string username = askStringInput(clientHandler, "User Name :");
+		string password = askStringInput(clientHandler, "Password :");
+
+        if(username is null || password  is null)
+        	return false;
+
+        if(username == password) {
+        	sendString(clientHandler, "Auth OK");
+        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+        	clientData.username = username;
+            return true;
+        } else {
+            sendString(clientHandler, "Auth Failed");
+            return false;
+        }
 	}
 }
 
@@ -49,12 +63,13 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 		super();
 	}
 	
-	override void handleCommandImpl(ISocketHandler socket, string command){
-		logger.info("Got message: "~command);
-		socket.send(command);
+	override void handleCommand(ISocketHandler clientHandler, string command){
+		MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+		logger.info("Got message: "~command~" from username "~clientData.username);
+		clientHandler.send(command);
 	}
 	
-	override void closingConnectionImpl(ISocketHandler socket){
+	override void closingConnection(ISocketHandler socket){
 		logger.info("Closing socket");
 	}
 }
