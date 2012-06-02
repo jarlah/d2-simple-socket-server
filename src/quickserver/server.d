@@ -51,14 +51,17 @@ abstract class AbstractSocketHandler: ISocketHandler {
 	SocketStream stream;
 	ClientData clientData;
 	ILogger logger;
+	string _remoteAddress = null, _localAddress = null;
 	
 	this(){}
 	
-	void setup(Socket sock, ClientData clientData){
+	void setup(ref Socket sock, ClientData cd){
 		this.socket = sock;
 		this.stream = new SocketStream(sock);
 		this.logger = getSimpleLogger();
-		this.clientData = clientData;
+		this.clientData = cd;
+		remoteAddress();
+		localAddress();
 	}
 	
 	void send(string msg){
@@ -70,11 +73,15 @@ abstract class AbstractSocketHandler: ISocketHandler {
 	}
 	
 	string remoteAddress(){
-		return to!string(socket.remoteAddress().toString());
+		if(_remoteAddress is null)
+			_remoteAddress = to!string(socket.remoteAddress().toString());
+		return _remoteAddress;
 	}
 	
 	string localAddress(){
-		return to!string(socket.localAddress().toString());
+		if(_localAddress is null)
+			_localAddress = to!string(socket.localAddress().toString());
+		return _localAddress;
 	}
 	
 	void close(){
@@ -95,7 +102,7 @@ interface ISocketHandler {
 	string 	readLine();
 	string 	remoteAddress();
 	string 	localAddress();
-	void 	setup(Socket socket, ClientData cd);
+	void 	setup(ref Socket socket, ClientData cd);
 	Socket 	getSocket();
 	ClientData getClientData();
 	void 	close();
@@ -210,8 +217,7 @@ class QuickServer {
 						goto next;
 					}
 					
-					auto address = handler.remoteAddress();
-					logger.info(to!string("Received "~to!string(read.length)~"bytes  from "~address~": \""~read~"\""));
+					logger.info(to!string("Received "~to!string(read.length)~"bytes from "~handler.remoteAddress()~": \""~read~"\""));
 					commandHandler.handleCommand(handler, read);					
 				}
 			}
@@ -251,29 +257,21 @@ class QuickServer {
 						}
 						
 						logger.info("Connection from "~handler.remoteAddress()~" established.");
-						
 						commandHandler.gotConnected(handler);
-						
 						handlers[sn] = handler;
-						
 						logger.info("\tTotal connections: "~to!string(handlers.length));
 					}
 					else
 					{
 						sn = listener.accept();
-						
-						string address = to!string(sn.remoteAddress().toString());
-												
 						assert(sn.isAlive);
-						
 						commandHandler.gotRejected(sn);
+						logger.info("Rejected connection; too many connections.");
 						
 						close:
 						sn.close();
 						assert(!sn.isAlive);
 						assert(listener.isAlive);
-						
-						logger.info("Rejected connection from "~address~"; too many connections.");
 					}
 				}
 				catch (Exception e)
@@ -323,7 +321,7 @@ class QuickServer {
 	
 	void setPort(int port)
 	in{
-		assert(port>0&&port<65535,"Port > 0 and < 65535");
+		assert(port>0,"Port > 0");
 	}body{
 		this.port = port;
 	}

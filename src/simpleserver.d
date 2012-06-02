@@ -29,7 +29,7 @@ int main(char[][] args)
 	server.setAuthenticator("simpleserver.DummyAuthenticator");
 	server.setSocketHandler("quickserver.server.DefaultSocketHandler");
 	server.setClientData("simpleserver.MyClientData");
-	server.setPort(8080);
+	server.setPort(1234);
 	server.setHost("localhost");
 	server.setName("SimpleServer v1.0");
 	server.startServer();
@@ -50,8 +50,10 @@ class DummyAuthenticator: QuickAuthenticator {
 
         if(username == password) {
         	sendString(clientHandler, "Auth OK");
-        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-        	clientData.username = username;
+        	if(clientHandler.getClientData() !is null){
+	        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+	        	clientData.username = username;
+        	}
             return true;
         } else {
             sendString(clientHandler, "Auth Failed");
@@ -66,8 +68,12 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	}
 	
 	override void handleCommand(ISocketHandler clientHandler, string command){
-		MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-		logger.info("Got message: "~command~" from username "~clientData.username);
+		string username = "unknown";
+		if(clientHandler.getClientData !is null){
+			MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+			username = clientData.username;
+		}
+		logger.info("Got message: "~command~" from username "~username);
 		clientHandler.send(command);
 	}
 	
