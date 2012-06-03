@@ -134,10 +134,10 @@ class SimpleServer {
 	int MAX = 120;
 	string host = "localhost";
 	int port = 1234;
-	string name = "QuickServer";
+	string name = "SimpleServer";
 	bool blocking = false;
 	int backlog = 60;
-	string socketHandlerClass = "quickserver.server.DefaultSocketHandler";
+	string socketHandlerClass = "simpleserver.server.DefaultClientHandler";
 	string commandHandlerClass = null;
 	string authHandlerClass = null;
 	string clientDataClass = null;
