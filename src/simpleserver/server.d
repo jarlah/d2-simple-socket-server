@@ -18,35 +18,35 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-module quickserver.server;
+module simpleserver.server;
 
 import std.conv, std.socket, std.socketstream, std.stdio, core.thread, std.string, std.ascii;
 
-import quickserver.logger;
+import simpleserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
 	ILogger logger;
 	this(){ logger = getSimpleLogger(); }
-	void handleCommand(ISocketHandler socket, string command){};
-	void gotConnected(ISocketHandler socket){};
+	void handleCommand(IClientHandler socket, string command){};
+	void gotConnected(IClientHandler socket){};
 	void gotRejected(Socket socket){};
-	void closingConnection(ISocketHandler socket){};
-	void lostConnection(ISocketHandler socket){};
+	void closingConnection(IClientHandler socket){};
+	void lostConnection(IClientHandler socket){};
 }
 
 private interface IClientCommandHandler {
-	void gotConnected(ISocketHandler handler);
+	void gotConnected(IClientHandler handler);
 	void gotRejected(Socket socket);
-	void closingConnection(ISocketHandler handler);
-	void lostConnection(ISocketHandler handler);
-	void handleCommand(ISocketHandler handler, string command);
+	void closingConnection(IClientHandler handler);
+	void lostConnection(IClientHandler handler);
+	void handleCommand(IClientHandler handler, string command);
 }
 
-class DefaultSocketHandler: AbstractSocketHandler {
+class DefaultClientHandler: AbstractClientHandler {
 	this(){}
 }
 
-abstract class AbstractSocketHandler: ISocketHandler {
+abstract class AbstractClientHandler: IClientHandler {
 	Socket socket;
 	SocketStream stream;
 	ClientData clientData;
@@ -97,7 +97,7 @@ abstract class AbstractSocketHandler: ISocketHandler {
 	}
 }
 
-interface ISocketHandler {
+interface IClientHandler {
 	void 	send(string msg);
 	string 	readLine();
 	string 	remoteAddress();
@@ -110,25 +110,25 @@ interface ISocketHandler {
 
 interface ClientData {}
 
-interface Authenticator { bool askAuthorisation(ISocketHandler handler); }
+interface Authenticator { bool askAuthorisation(IClientHandler handler); }
 
 abstract class QuickAuthenticator: Authenticator {	
-	string askStringInput(ISocketHandler clientHandler, string prompt){
+	string askStringInput(IClientHandler clientHandler, string prompt){
 		if(prompt !is null)
 			clientHandler.send(prompt);
 		return getStringInput(clientHandler);
 	}
 	
-	string getStringInput(ISocketHandler clientHandler){
+	string getStringInput(IClientHandler clientHandler){
 		return clientHandler.readLine();
 	}
 	
-	void sendString(ISocketHandler clientHandler, string message){
+	void sendString(IClientHandler clientHandler, string message){
 		clientHandler.send(message);
 	}
 }
 
-class QuickServer {
+class SimpleServer {
 	private:
 	// Settings
 	int MAX = 120;
@@ -142,7 +142,7 @@ class QuickServer {
 	string authHandlerClass = null;
 	string clientDataClass = null;
 	IClientCommandHandler commandHandler = null;
-	ISocketHandler[Socket] handlers;
+	IClientHandler[Socket] handlers;
 	Authenticator authHandler = null;
 	ILogger logger = null;
 	
@@ -237,7 +237,7 @@ class QuickServer {
 						assert(listener.isAlive);
 						
 						logger.info("Loading socket handler class "~socketHandlerClass);
-						ISocketHandler handler = cast(ISocketHandler)Object.factory(socketHandlerClass);
+						IClientHandler handler = cast(IClientHandler)Object.factory(socketHandlerClass);
 						
 						ClientData clientData = null;
 						if(clientDataClass !is null){
@@ -352,7 +352,7 @@ class QuickServer {
 		this.blocking = boolean;
 	}
 	
-	private void closeSocket(ISocketHandler handler){
+	private void closeSocket(IClientHandler handler){
 		commandHandler.closingConnection(handler);
 		
 		try

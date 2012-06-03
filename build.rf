@@ -1,9 +1,9 @@
 -od"bin"
--of"bin/QuickServer"
+-of"bin/D2SimpleSocketServer"
 
 -I"src"
 
-"src/quickserver/logger.d"
-"src/quickserver/server.d"
-"src/simpleserver.d"
+"src/echoserver.d"
+"src/simpleserver/logger.d"
+"src/simpleserver/server.d"
 

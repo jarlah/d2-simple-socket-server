@@ -18,7 +18,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-module quickserver.logger;
+module simpleserver.logger;
 
 import std.conv, std.socket, std.stdio, core.thread, std.datetime, std.file, std.string,std.regex;
 

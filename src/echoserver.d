@@ -20,15 +20,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import std.conv, std.socket, std.stdio, core.thread;
 
-import quickserver.server;
+import simpleserver.server;
 
 int main(char[][] args)
 {
-	QuickServer server =  new QuickServer();
-	server.setCommandHandler("simpleserver.SimpleClientCommandHandler");
-	server.setAuthenticator("simpleserver.DummyAuthenticator");
-	server.setSocketHandler("quickserver.server.DefaultSocketHandler");
-	server.setClientData("simpleserver.MyClientData");
+	SimpleServer server =  new SimpleServer();
+	server.setCommandHandler("echoserver.SimpleClientCommandHandler");
+	server.setAuthenticator("echoserver.DummyAuthenticator");
+	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
+	server.setClientData("echoserver.MyClientData");
 	server.setPort(1234);
 	server.setHost("localhost");
 	server.setName("SimpleServer v1.0");
@@ -41,7 +41,7 @@ class MyClientData: ClientData {
 }
 
 class DummyAuthenticator: QuickAuthenticator {
-	bool askAuthorisation(ISocketHandler clientHandler){
+	bool askAuthorisation(IClientHandler clientHandler){
 		string username = askStringInput(clientHandler, "User Name :");
 		string password = askStringInput(clientHandler, "Password :");
 
@@ -67,7 +67,7 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 		super();
 	}
 	
-	override void handleCommand(ISocketHandler clientHandler, string command){
+	override void handleCommand(IClientHandler clientHandler, string command){
 		string username = "unknown";
 		if(clientHandler.getClientData !is null){
 			MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
@@ -77,11 +77,11 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 		clientHandler.send(command);
 	}
 	
-	override void closingConnection(ISocketHandler socket){
+	override void closingConnection(IClientHandler socket){
 		logger.info("Closing socket");
 	}
 	
-	override void lostConnection(ISocketHandler socket){
+	override void lostConnection(IClientHandler socket){
 		logger.info("Hey I lost my connection");
 	}
 }
