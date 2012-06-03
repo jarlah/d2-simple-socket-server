@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="D2 Simple Socket Server : This library is only meant for D2 and Phobos. Does not support Tango. Single threaded. The server has a maximum setting for number of concurrent requests that disallows new clients when this limit is reached. The primary goal for this library is to solve the occasional need for a dead plain socket server. Imitates strongly the QuickServer library in Java, the best protocol framework available as to this date." />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>D2 Simple Socket Server</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/jarlah/d2-simple-socket-server">View on GitHub</a>
+
+          <h1 id="project_title">D2 Simple Socket Server</h1>
+          <h2 id="project_tagline">This library is only meant for D2 and Phobos. Does not support Tango. Single threaded. The server has a maximum setting for number of concurrent requests that disallows new clients when this limit is reached. The primary goal for this library is to solve the occasional need for a dead plain socket server. Imitates strongly the QuickServer library in Java, the best protocol framework available as to this date.</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/jarlah/d2-simple-socket-server/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/jarlah/d2-simple-socket-server/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>This software is licensed under the GPL v2 license.</p>
+
+<p>Compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04</p>
+
+<p>Tested automatically by attacking the service with many multiple concurrent requests (SocketClient.java) that in turn ensures less probability for deadlocks.</p>
+
+<p>Single threaded and non-blocking.
+Supports many thousands of concurrent requests at any given time. </p>
+
+<p>HOWTO:</p>
+
+<p>Download or fork into any arbitrary folder.</p>
+
+<p>Install DDT for Eclipse. Execute the automatically generated executable from the project directory, or right click the project in Eclipse and choose "Run as" -&gt; "D Application".</p>
+
+<pre><code>~/d2-simple-socket-server$ bin/SimpleServer
+Disable Log: false  Log All: true   Log level: ALL
+2012-06-01T18:15:23.5954827Z INFO: Listening on port 1234
+</code></pre>
+
+<p>This will load the logger properties file in the project directory. If you decide to move the executable, and forget about the logger.properties file it will set LogLevel to ALL by default like this:</p>
+
+<pre><code>~/d2-simple-socket-server$ bin/SimpleServer
+Failed in AbstractLogger constructor.
+Falling back to LogLevel.ALL.
+To override the log level you'll have to add a logger.properties file in the current directory, that you fill with the property "simpleserver.logger.level=INFO"
+2012-06-01T18:18:07.4504363Z INFO: Listening on port 1234
+</code></pre>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">D2 Simple Socket Server maintained by <a href="https://github.com/jarlah">jarlah</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
