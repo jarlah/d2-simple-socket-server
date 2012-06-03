@@ -209,8 +209,13 @@ class SimpleServer {
 					}
 					
 					logger.info(to!string("Received "~to!string(read.length)~"bytes from "~handler.remoteAddress()~": \""~read~"\""));
-					
-					commandHandler.handleCommand(handler, read);
+
+					try{
+						commandHandler.handleCommand(handler, read);
+					}catch(Exception e){
+						logger.error(e.toString());
+						throw e;
+					}
 				}
 			}
 			
