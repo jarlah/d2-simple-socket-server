@@ -30,6 +30,22 @@ interface ILogger {
 	void fatal(string msg);
 }
 
+ILogger getNoLogger()
+{
+	static ILogger nolog;
+
+	if(!nolog)
+	{
+		synchronized
+		{
+			if(!nolog)
+				nolog = new NoLogger();
+		}
+	}
+	
+	return nolog;
+}
+
 ILogger getSimpleLogger()
 {
 	static ILogger instance;
@@ -56,6 +72,19 @@ class SimpleLogger: AbstractLogger{
 	}
 }
 
+class NoLogger: AbstractLogger{
+	this(){
+		super();
+		logLevel = LogLevel.OFF;
+		logAll = false;
+		disableLog = true;
+	}
+	
+	override string dateStringImpl(SysTime systime){
+		return systime.toISOExtString();
+	}
+}
+
 private enum LogLevel {
 	ALL = 6,
 	DEBUG = 5,
@@ -69,7 +98,7 @@ private enum LogLevel {
 abstract class AbstractLogger: ILogger {
 	private LogLevel[string] properties;
 	private string msgDelimiter;
-	private LogLevel logLevel = LogLevel.ALL;
+	protected LogLevel logLevel = LogLevel.ALL;
 	private bool logAll,disableLog;
 
 	this(){
@@ -86,13 +115,16 @@ abstract class AbstractLogger: ILogger {
 		foreach(propertyLine; propsArr){
 			scope(failure)
 				throw new Exception("Malformed property: "~propertyLine);
+			if(propertyLine.startsWith("#"))
+				continue;
 			string[] arr = explode(propertyLine,'=');
-			properties[strip(arr[0])]=to!LogLevel(strip(arr[1]));
+			string key = strip(arr[0]);
+			string val = strip(arr[1]);
+			properties[strip(arr[0])]=to!LogLevel(val);
 		}
 		logLevel = properties["simpleserver.logger.level"];
 		logAll = logLevel == LogLevel.ALL;
 		disableLog = logLevel == LogLevel.OFF;
-		writeln("Disable Log: "~to!string(disableLog)~"\t"~"Log All: "~to!string(logAll)~"\t"~"Log level: "~to!string(logLevel));
 	}
 	
 	/**
@@ -114,7 +146,7 @@ abstract class AbstractLogger: ILogger {
 	
 	public abstract string dateStringImpl(SysTime systime);
 	
-	private void append(string msg){
+	protected void append(string msg){
 		synchronized{
 			writeln(msg);
 		}

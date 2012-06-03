@@ -26,12 +26,15 @@ import simpleserver.logger;
 
 class AbstractClientCommandHandler: IClientCommandHandler {
 	ILogger logger;
+	SimpleServer server;
 	this(){ logger = getSimpleLogger(); }
 	void handleCommand(IClientHandler socket, string command){};
 	void gotConnected(IClientHandler socket){};
 	void gotRejected(Socket socket){};
 	void closingConnection(IClientHandler socket){};
 	void lostConnection(IClientHandler socket){};
+	void setServer(ref SimpleServer server){ this.server = server; }
+	SimpleServer getServer(){ return this.server; }
 }
 
 private interface IClientCommandHandler {
@@ -40,6 +43,8 @@ private interface IClientCommandHandler {
 	void closingConnection(IClientHandler handler);
 	void lostConnection(IClientHandler handler);
 	void handleCommand(IClientHandler handler, string command);
+	void setServer(ref SimpleServer server);
+	SimpleServer getServer();
 }
 
 class DefaultClientHandler: AbstractClientHandler {
@@ -119,18 +124,24 @@ interface Authenticator {
 }
 
 abstract class QuickAuthenticator: Authenticator {	
+	private ILogger logger;
+	
+	this(){
+		this.logger = getSimpleLogger();
+	}
 	string askStringInput(IClientHandler clientHandler, string prompt){
-		if(prompt !is null)
-			clientHandler.send(prompt);
+		clientHandler.send(prompt);
 		return getStringInput(clientHandler);
 	}
 	
 	string getStringInput(IClientHandler clientHandler){
+		logger.info("Waiting for input");
 		return clientHandler.readLine();
 	}
 	
 	void sendString(IClientHandler clientHandler, string message){
 		clientHandler.send(message);
+		logger.info(message);
 	}
 }
 
@@ -138,17 +149,26 @@ class SimpleServer {
 	private ILogger logger = null;
 	
 	public:
-	this(){
-		logger = getSimpleLogger();
-	}
+	this(){}
 	
 	void startServer(){
+		startServer(this);
+	}
+	
+	void startServer(ref SimpleServer server){
+		if(doNotLog == false){
+			logger = getSimpleLogger();
+		}else{
+			logger = getNoLogger();
+		}
+		
 		logger.info("Starting "~name); 
 		
 		enforce(commandHandlerClass);
 		logger.info("Loading handler class "~commandHandlerClass);
 		commandHandler = cast(IClientCommandHandler) Object.factory(commandHandlerClass);
 		enforce(commandHandler);
+		commandHandler.setServer(server);
 		
 		if(authHandlerClass !is null){
 			logger.info("Loading authenticator class "~authHandlerClass);
@@ -287,6 +307,10 @@ class SimpleServer {
 		}
 	}
 	
+	IClientCommandHandler getCommandHandler(){
+		return this.commandHandler;
+	}
+	
 	void setCommandHandler(string handlerClass)
 	in{
 		enforce("Command handler class cannot be null",handlerClass);
@@ -359,13 +383,27 @@ class SimpleServer {
 		this.socketTimeout = dur;
 	}
 	
+	string getVersionNumber(){
+		return this.versionNumber;
+	}
+	
+	ulong getNumberOfClients(){
+		return handlers.length;
+	}
+	
+	void disableLog(){
+		doNotLog = true;
+	}
+	
 	private:
+	string versionNumber = "1.0.1-BETA";
 	int MAX = 120;
 	string host = "localhost";
 	int port = 1234;
 	string name = "SimpleServer";
 	bool blocking = false;
 	int backlog = 60;
+	bool doNotLog = false;
 	std.socket.Duration socketTimeout = dur!"seconds"(60);
 	string socketHandlerClass = "simpleserver.server.DefaultClientHandler";
 	string commandHandlerClass = null;
