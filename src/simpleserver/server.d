@@ -253,6 +253,8 @@ class SimpleServer {
 							logger.error("User failed to authenticate");
 							goto close;
 						}
+					}else{
+						handler.send("Auth OK");
 					}
 					
 					logger.info("Connection from "~handler.remoteAddress()~" established.");

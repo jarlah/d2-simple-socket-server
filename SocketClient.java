@@ -33,6 +33,15 @@ import java.util.*;
  * @author Jarl André Hübenthal
  */
 public class SocketClient {
+	
+	private static final String AUTH_OK = "Auth OK";
+	
+	public static String sendAndWait(String msg, BufferedReader in, PrintWriter out) throws Exception{
+		out.print(msg+"\n");
+		out.flush();
+		return in.readLine();
+	}
+	
 	public static void main (String args[]) throws Exception{
 		List<Callable<String>> list = new ArrayList<Callable<String>>();
 		int size = 100;
@@ -54,39 +63,25 @@ public class SocketClient {
 						System.err.println("Couldn't get I/O for " + "the connection to: localhost.");
 						System.exit(1);
 					}
+					
+					String string = null;
 						
 					try {			
 						String prompt = in.readLine();
-						out.print("jarl\n");
-						out.flush();
-						prompt = in.readLine();
-						out.print("jarl\n");
-						out.flush();
-					}catch(Exception e){
-						System.err.println(e.getLocalizedMessage());
-					}
-					
-					String string = null;
-
-					try {			
-						String prompt = in.readLine();
-						if(prompt.contains("Auth OK")){
-							out.print("Dette er en test\n");
-							out.flush();
-							Thread.sleep(2000);
+						if(prompt!=null && prompt.contains("User Name :")){
+							prompt = sendAndWait("jarl",in, out);
+							if(prompt!=null && prompt.contains("Password :")){
+								prompt = sendAndWait("jarl",in, out);
+								if(prompt.contains(AUTH_OK)){
+									prompt = sendAndWait("Dette er en test",in, out);
+								}
+							}
+						}else if(prompt.contains(AUTH_OK)){
+							prompt = sendAndWait("Dette er en test",in, out);
 						 }
+						 string = prompt;
 					}catch(Exception e){
 						System.err.println(e.getLocalizedMessage());
-					}
-					
-					
-					try{
-						String result = null;
-						while(in.ready() && (result = in.readLine())!=null){
-							string = result;
-						}
-					}catch(Exception e){
-						System.err.println("Could not read response");
 					}
 					
 					try{
