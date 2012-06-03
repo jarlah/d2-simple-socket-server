@@ -37,7 +37,7 @@ int main(char[][] args)
 }
 
 class MyClientData: ClientData {
-	string username;
+	string username = "unknown";
 }
 
 class DummyAuthenticator: QuickAuthenticator {
@@ -50,10 +50,8 @@ class DummyAuthenticator: QuickAuthenticator {
 
         if(username == password) {
         	sendString(clientHandler, "Auth OK");
-        	if(clientHandler.getClientData() !is null){
-	        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-	        	clientData.username = username;
-        	}
+        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+	        clientData.username = username;
             return true;
         } else {
             sendString(clientHandler, "Auth Failed");
@@ -69,10 +67,8 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	
 	override void handleCommand(IClientHandler clientHandler, string command){
 		string username = "unknown";
-		if(clientHandler.getClientData !is null){
-			MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-			username = clientData.username;
-		}
+		MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
+		username = clientData.username;
 		logger.info("Got message: "~command~" from username "~username);
 		clientHandler.send(command);
 	}

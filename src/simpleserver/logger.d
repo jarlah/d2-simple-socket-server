@@ -115,7 +115,9 @@ abstract class AbstractLogger: ILogger {
 	public abstract string dateStringImpl(SysTime systime);
 	
 	private void append(string msg){
-		writeln(msg);
+		synchronized{
+			writeln(msg);
+		}
 	}
 	
 	private string datestring(){

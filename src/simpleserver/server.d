@@ -49,8 +49,8 @@ class DefaultClientHandler: AbstractClientHandler {
 abstract class AbstractClientHandler: IClientHandler {
 	Socket socket;
 	SocketStream stream;
-	ClientData clientData;
-	ILogger logger;
+	ClientData clientData = null;
+	ILogger logger = null;
 	string _remoteAddress = null, _localAddress = null;
 	
 	this(){}
@@ -65,7 +65,7 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	void send(string msg){
-		stream.writeString(msg~newline);
+		stream.writeLine(msg);
 	}
 	
 	string readLine(){
@@ -93,6 +93,8 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	ClientData getClientData(){
+		if(clientData is null)
+			throw new Exception("There are no client data on the client handler!");
 		return clientData;
 	}
 }
@@ -129,22 +131,7 @@ abstract class QuickAuthenticator: Authenticator {
 }
 
 class SimpleServer {
-	private:
-	// Settings
-	int MAX = 120;
-	string host = "localhost";
-	int port = 1234;
-	string name = "SimpleServer";
-	bool blocking = false;
-	int backlog = 60;
-	string socketHandlerClass = "simpleserver.server.DefaultClientHandler";
-	string commandHandlerClass = null;
-	string authHandlerClass = null;
-	string clientDataClass = null;
-	IClientCommandHandler commandHandler = null;
-	IClientHandler[Socket] handlers;
-	Authenticator authHandler = null;
-	ILogger logger = null;
+	private ILogger logger = null;
 	
 	public:
 	this(){
@@ -218,67 +205,72 @@ class SimpleServer {
 					}
 					
 					logger.info(to!string("Received "~to!string(read.length)~"bytes from "~handler.remoteAddress()~": \""~read~"\""));
-					commandHandler.handleCommand(handler, read);					
+					
+					commandHandler.handleCommand(handler, read);
 				}
 			}
 			
 			if (sset.isSet(listener))
 			{
 				Socket sn;
-				try
+
+				if (handlers.length < MAX)
 				{
-					if (handlers.length < MAX)
-					{
-						scope(failure)
+					scope(failure)
+						goto close;
+					
+					sn = listener.accept();
+					
+					sn.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, socketTimeout);
+					
+					assert(sn.isAlive);
+					assert(listener.isAlive);
+					
+					logger.info("Loading socket handler class "~socketHandlerClass);
+					IClientHandler handler = cast(IClientHandler)Object.factory(socketHandlerClass);
+					
+					ClientData clientData = null;
+					if(clientDataClass !is null){
+						logger.info("Loading client data class "~clientDataClass);
+						clientData = cast(ClientData)Object.factory(clientDataClass);
+					}
+					
+					handler.setup(sn, clientData);
+					
+					if(authHandler !is null){
+						bool authorized;
+						
+						try{
+							authorized = authHandler.askAuthorisation(handler);
+						}catch(Exception e){
+							logger.error(e.toString());
+							authorized = false;
+						}
+						
+						if(authorized){
+							logger.info("User authenticated");
+						}else{
+							logger.error("User failed to authenticate");
 							goto close;
-						
-						sn = listener.accept();
-						assert(sn.isAlive);
-						assert(listener.isAlive);
-						
-						logger.info("Loading socket handler class "~socketHandlerClass);
-						IClientHandler handler = cast(IClientHandler)Object.factory(socketHandlerClass);
-						
-						ClientData clientData = null;
-						if(clientDataClass !is null){
-							logger.info("Loading client data class "~clientDataClass);
-							clientData = cast(ClientData)Object.factory(clientDataClass);
 						}
-						
-						handler.setup(sn, clientData);
-						
-						if(authHandler !is null){
-							if(authHandler.askAuthorisation(handler)){
-								logger.info("User authenticated");
-							}else{
-								logger.warning("User failed to authenticate");
-								goto close;
-							}
-						}
-						
-						logger.info("Connection from "~handler.remoteAddress()~" established.");
-						commandHandler.gotConnected(handler);
-						handlers[sn] = handler;
-						logger.info("\tTotal connections: "~to!string(handlers.length));
 					}
-					else
-					{
-						sn = listener.accept();
-						assert(sn.isAlive);
-						commandHandler.gotRejected(sn);
-						logger.info("Rejected connection; too many connections.");
-						
-						close:
-						sn.close();
-						assert(!sn.isAlive);
-						assert(listener.isAlive);
-					}
+					
+					logger.info("Connection from "~handler.remoteAddress()~" established.");
+					commandHandler.gotConnected(handler);
+					handlers[sn] = handler;
+					logger.info("\tTotal connections: "~to!string(handlers.length));
 				}
-				catch (Exception e)
+				else
 				{
-					logger.error("Error accepting: "~e.toString());
-					if (sn)
-						sn.close();
+					sn = listener.accept();
+					assert(sn.isAlive);
+					commandHandler.gotRejected(sn);
+					logger.warning("Rejected connection; too many connections.");
+					
+					close:
+					sn.close();
+					assert(!sn.isAlive);
+					assert(listener.isAlive);
 				}
 			}
 		}
@@ -352,7 +344,27 @@ class SimpleServer {
 		this.blocking = boolean;
 	}
 	
-	private void closeSocket(IClientHandler handler){
+	void setSocketTimeout(std.socket.Duration dur){
+		this.socketTimeout = dur;
+	}
+	
+	private:
+	int MAX = 120;
+	string host = "localhost";
+	int port = 1234;
+	string name = "SimpleServer";
+	bool blocking = false;
+	int backlog = 60;
+	std.socket.Duration socketTimeout = dur!"seconds"(60);
+	string socketHandlerClass = "simpleserver.server.DefaultClientHandler";
+	string commandHandlerClass = null;
+	string authHandlerClass = null;
+	string clientDataClass = null;
+	IClientCommandHandler commandHandler = null;
+	IClientHandler[Socket] handlers;
+	Authenticator authHandler = null;
+	
+	void closeSocket(IClientHandler handler){
 		commandHandler.closingConnection(handler);
 		
 		try
@@ -365,6 +377,7 @@ class SimpleServer {
 		}
 		
 		handler.close();
+		
 		handlers.remove(handler.getSocket);
 		
 		logger.info("\tTotal connections: "~to!string(handlers.length));
