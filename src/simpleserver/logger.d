@@ -89,7 +89,7 @@ abstract class AbstractLogger: ILogger {
 			string[] arr = explode(propertyLine,'=');
 			properties[strip(arr[0])]=to!LogLevel(strip(arr[1]));
 		}
-		logLevel = properties["quickserver.logger.level"];
+		logLevel = properties["simpleserver.logger.level"];
 		logAll = logLevel == LogLevel.ALL;
 		disableLog = logLevel == LogLevel.OFF;
 		writeln("Disable Log: "~to!string(disableLog)~"\t"~"Log All: "~to!string(logAll)~"\t"~"Log level: "~to!string(logLevel));
