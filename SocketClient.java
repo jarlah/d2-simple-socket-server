@@ -34,7 +34,7 @@ import java.util.*;
  */
 public class SocketClient {
 	
-	private static final String AUTH_OK = "Auth OK";
+	private static final String AUTH_OK = "AUTH OK";
 	
 	public static String sendAndWait(String msg, BufferedReader in, PrintWriter out) throws Exception{
 		out.print(msg+"\n");
@@ -76,7 +76,7 @@ public class SocketClient {
 									prompt = sendAndWait("Dette er en test",in, out);
 								}
 							}
-						}else if(prompt.contains(AUTH_OK)){
+						}else if(prompt.startsWith(AUTH_OK)){
 							prompt = sendAndWait("Dette er en test",in, out);
 						 }
 						 string = prompt;

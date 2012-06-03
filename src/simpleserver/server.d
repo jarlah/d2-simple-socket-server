@@ -112,7 +112,11 @@ interface IClientHandler {
 
 interface ClientData {}
 
-interface Authenticator { bool askAuthorisation(IClientHandler handler); }
+interface Authenticator { 
+	bool askAuthorisation(IClientHandler handler); 
+	static string AUTH_OK = "AUTH OK";
+	static string AUTH_ERR = "AUTH ERR";
+}
 
 abstract class QuickAuthenticator: Authenticator {	
 	string askStringInput(IClientHandler clientHandler, string prompt){
@@ -254,7 +258,7 @@ class SimpleServer {
 							goto close;
 						}
 					}else{
-						handler.send("Auth OK");
+						handler.send(Authenticator.AUTH_OK~": Welcome.");
 					}
 					
 					logger.info("Connection from "~handler.remoteAddress()~" established.");

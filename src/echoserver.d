@@ -49,12 +49,12 @@ class DummyAuthenticator: QuickAuthenticator {
         	return false;
 
         if(username == password) {
-        	sendString(clientHandler, "Auth OK");
+        	sendString(clientHandler, AUTH_OK~": Logged in successfully.");
         	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
 	        clientData.username = username;
             return true;
         } else {
-            sendString(clientHandler, "Auth Failed");
+            sendString(clientHandler, AUTH_ERR~": Username must equal password.");
             return false;
         }
 	}
@@ -71,13 +71,14 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 		username = clientData.username;
 		logger.info("Got message: "~command~" from username "~username);
 		clientHandler.send(command);
+		logger.info("Echoed the message");
 	}
 	
 	override void closingConnection(IClientHandler socket){
-		logger.info("Closing socket");
+		logger.info("Closing socket from "~socket.remoteAddress());
 	}
 	
 	override void lostConnection(IClientHandler socket){
-		logger.info("Hey I lost my connection");
+		logger.info("Lost connection from "~socket.remoteAddress());
 	}
 }
