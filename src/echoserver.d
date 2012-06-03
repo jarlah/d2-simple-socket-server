@@ -26,7 +26,7 @@ int main(char[][] args)
 {
 	SimpleServer server =  new SimpleServer();
 	server.setCommandHandler("echoserver.SimpleClientCommandHandler");
-//	server.setAuthenticator("echoserver.DummyAuthenticator");
+	server.setAuthenticator("echoserver.DummyAuthenticator");
 	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
 	server.setClientData("echoserver.MyClientData");
 	server.setPort(1234);
