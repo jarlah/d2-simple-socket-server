@@ -1,26 +1,25 @@
 This software is licensed under the GPL v2 license.
 
-compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
+Compiled and tested with DMD64 D Compiler v2.059 on ubuntu 12.04
 
-Tested by attacking the service with many multiple concurrent requests (SocketClient.java) that in turn ensures less probability for deadlocks.
+Tested automatically by attacking the service with many multiple concurrent requests (SocketClient.java) that in turn ensures less probability for deadlocks.
 
-Single threaded and non-blocking. Supports many thousands of concurrent requests at any given time. 
+Single threaded and non-blocking. Supports many thousands of concurrent requests at any given time.
 
 HOWTO:
 
-Linux/Unix/Windows:
+Download or fork into any arbitrary folder.
 
-Install DDT for Eclipse. Execute the generated executable from the project directory like:
+Install DDT for Eclipse. Execute the automatically generated executable from the project directory, or right click the project in Eclipse and choose "Run as" -> "D Application".
 
-~/d2-simple-socket-server$ bin/SimpleServer 
-Disable Log: false	Log All: true	Log level: ALL
+~/d2-simple-socket-server$ bin/SimpleServer
+Disable Log: false  Log All: true   Log level: ALL
 2012-06-01T18:15:23.5954827Z INFO: Listening on port 1234
 
 This will load the logger properties file in the project directory. If you decide to move the executable, and forget about the logger.properties file it will set LogLevel to ALL by default like this:
 
-~/d2-simple-socket-server$ bin/SimpleServer 
+~/d2-simple-socket-server$ bin/SimpleServer
 Failed in AbstractLogger constructor.
 Falling back to LogLevel.ALL.
 To override the log level you'll have to add a logger.properties file in the current directory, that you fill with the property "simpleserver.logger.level=INFO"
 2012-06-01T18:18:07.4504363Z INFO: Listening on port 1234
-
