@@ -20,14 +20,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module simpleserver.server;
 
-import std.conv, std.socket, std.socketstream, std.stdio, core.thread, std.string, std.ascii;
+import std.conv, std.socket, std.concurrency, std.socketstream, std.stdio, core.thread, std.string, std.ascii;
 
 import simpleserver.logger;
 
+ILogger logger;
+
 class AbstractClientCommandHandler: IClientCommandHandler {
-	ILogger logger;
 	SimpleServer server;
-	this(){ logger = getSimpleLogger(); }
+	this(){}
 	void handleCommand(IClientHandler socket, string command){};
 	void gotConnected(IClientHandler socket){};
 	void gotRejected(Socket socket){};
@@ -55,7 +56,6 @@ abstract class AbstractClientHandler: IClientHandler {
 	Socket socket;
 	SocketStream stream;
 	ClientData clientData = null;
-	ILogger logger = null;
 	string _remoteAddress = null, _localAddress = null;
 	
 	this(){}
@@ -63,7 +63,6 @@ abstract class AbstractClientHandler: IClientHandler {
 	void setup(ref Socket sock, ClientData cd){
 		this.socket = sock;
 		this.stream = new SocketStream(sock);
-		this.logger = getSimpleLogger();
 		this.clientData = cd;
 		remoteAddress();
 		localAddress();
@@ -124,38 +123,61 @@ interface Authenticator {
 }
 
 abstract class QuickAuthenticator: Authenticator {	
-	private ILogger logger;
+	this(){}
 	
-	this(){
-		this.logger = getSimpleLogger();
-	}
 	string askStringInput(IClientHandler clientHandler, string prompt){
 		clientHandler.send(prompt);
 		return getStringInput(clientHandler);
 	}
 	
 	string getStringInput(IClientHandler clientHandler){
-		logger.info("Waiting for input");
 		return clientHandler.readLine();
 	}
 	
 	void sendString(IClientHandler clientHandler, string message){
 		clientHandler.send(message);
-		logger.info(message);
 	}
 }
 
-class SimpleServer {
-	private ILogger logger = null;
+class SimpleServer: Thread{
+	private SimpleServer service;
+	private bool isServerStarted = false;
+	private SimpleServer adminServer = null;
 	
 	public:
-	this(){}
-	
+	this(){
+		super( &run );
+	}
+		
 	void startServer(){
 		startServer(this);
 	}
 	
 	void startServer(ref SimpleServer server){
+		this.service = server;
+		start();
+		isServerStarted = true;
+	}
+	
+	void startAdminServer()
+	in {
+		enforce(isServerStarted is true, "Admin service cannot be started before the main service");
+		enforce(adminServer is null, "Admin service is already started");
+	}
+	body
+	{
+		adminServer =  new SimpleServer();
+		adminServer.setCommandHandler("simpleserver.server.AdminClientCommandHandler");
+		adminServer.setAuthenticator("simpleserver.server.AdminAuthenticator");
+		adminServer.setPort(adminPort);
+		adminServer.setHost(host);
+		adminServer.setName(adminName);
+		adminServer.disableLog();
+		writeln("Starting "~adminServer.name); 
+		adminServer.startServer(this.service);
+	}
+	
+	void run(){
 		if(doNotLog == false){
 			logger = getSimpleLogger();
 		}else{
@@ -168,7 +190,7 @@ class SimpleServer {
 		logger.info("Loading handler class "~commandHandlerClass);
 		commandHandler = cast(IClientCommandHandler) Object.factory(commandHandlerClass);
 		enforce(commandHandler);
-		commandHandler.setServer(server);
+		commandHandler.setServer(service);
 		
 		if(authHandlerClass !is null){
 			logger.info("Loading authenticator class "~authHandlerClass);
@@ -395,12 +417,27 @@ class SimpleServer {
 		doNotLog = true;
 	}
 	
+	void setAdminPort(int port)
+	in {
+		assert(port !is this.port,"Admin port number cannot be the same as the server port number");
+	}
+	body
+	{
+		this.adminPort = port;
+	}
+	
+	void setAdminName(string name){
+		this.adminName = name;
+	}
+	
 	private:
 	string versionNumber = "1.0.1-BETA";
 	int MAX = 120;
 	string host = "localhost";
 	int port = 1234;
+	int adminPort = 2345;
 	string name = "SimpleServer";
+	string adminName = "SimpleServer Admin";
 	bool blocking = false;
 	int backlog = 60;
 	bool doNotLog = false;
@@ -432,5 +469,52 @@ class SimpleServer {
 		logger.info("\tTotal connections: "~to!string(handlers.length));
 		
 		commandHandler.lostConnection(handler);
+	}
+}
+
+class AdminAuthenticator: QuickAuthenticator {
+	bool askAuthorisation(IClientHandler clientHandler){
+		clientHandler.send("+OK --------------------------------------");
+		clientHandler.send("+OK This server requires authentication!");
+		clientHandler.send("+OK");
+		clientHandler.send("+OK --------------------------------------");
+		
+		string username = askStringInput(clientHandler, "+OK Username required");
+		string password = askStringInput(clientHandler, "+OK Password required");
+
+        if(username is null || password  is null)
+        	return false;
+
+        if(username == password) {
+        	sendString(clientHandler, "+OK Logged in");
+            return true;
+        } else {
+            sendString(clientHandler, "-ERR Authorisation Failed");
+            return false;
+        }
+	}
+}
+
+class AdminClientCommandHandler: AbstractClientCommandHandler {
+	this(){
+		super();
+	}
+	
+	override void handleCommand(IClientHandler clientHandler, string command){
+		logger.info("Got message: "~command);
+		if("version" == command)
+			clientHandler.send("+OK "~getServer().getVersionNumber());
+		else if("noclient server" == command)
+			clientHandler.send("+OK "~to!string(getServer().getNumberOfClients()));
+		else
+			clientHandler.send("-ERR Unknown command");
+	}
+	
+	override void closingConnection(IClientHandler socket){
+		logger.info("Closing socket from "~socket.remoteAddress());
+	}
+	
+	override void lostConnection(IClientHandler socket){
+		logger.info("Lost connection from "~socket.remoteAddress());
 	}
 }
