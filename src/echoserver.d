@@ -72,12 +72,16 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	override void handleCommand(IClientHandler clientHandler, string command){
 		MyClientData data = cast(MyClientData)clientHandler.getClientData();
 		logger.info("Got message: "~command);
-		if(command.startsWith("+RCV BASE64")){
-			string chomped = chompPrefix(command,"+RCV BASE64 ");
-			ubyte[] msg = Base64.decode(chomped);
-			logger.info("Received "~to!string(msg.length)~" bytes");
-			clientHandler.sendString("+RCV OK");
-			data.bytes = msg;
+		if(command.startsWith("+RCV BASE64 ")){
+			string chomped = strip(chompPrefix(command,"+RCV BASE64 "));
+			if(string.length==0){
+				clientHandler.sendString("+RCV ERR Missing argument?");
+			}else{
+				ubyte[] msg = Base64.decode(chomped);
+				logger.info("Received "~to!string(msg.length)~" bytes");
+				clientHandler.sendString("+RCV OK");
+				data.bytes = msg;
+			}
 		}else{
 			clientHandler.sendString(command);
 			logger.info("Echoed the message");
