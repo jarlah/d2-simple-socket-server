@@ -18,7 +18,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-import std.conv, std.socket, std.stdio, core.thread, std.concurrency;
+import std.conv, std.string, std.socket, std.stdio, core.thread, std.concurrency, std.base64;
 
 import simpleserver.server;
 
@@ -40,7 +40,8 @@ int main(char[][] args)
 }
 
 class MyClientData: ClientData {
-	string username = "unknown";
+	string username;
+	ubyte[] bytes;
 }
 
 class DummyAuthenticator: QuickAuthenticator {
@@ -69,11 +70,18 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	}
 	
 	override void handleCommand(IClientHandler clientHandler, string command){
-		MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-		string username = clientData.username;
-		logger.info("Got message: "~command~" from username "~username);
-		clientHandler.send(command);
-		logger.info("Echoed the message");
+		MyClientData data = cast(MyClientData)clientHandler.getClientData();
+		logger.info("Got message: "~command);
+		if(command.startsWith("+RCV BASE64")){
+			string chomped = chompPrefix(command,"+RCV BASE64 ");
+			ubyte[] msg = Base64.decode(chomped);
+			logger.info("Received "~to!string(msg.length)~" bytes");
+			clientHandler.sendString("+RCV OK");
+			data.bytes = msg;
+		}else{
+			clientHandler.sendString(command);
+			logger.info("Echoed the message");
+		}
 	}
 	
 	override void closingConnection(IClientHandler socket){

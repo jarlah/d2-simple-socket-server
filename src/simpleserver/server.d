@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module simpleserver.server;
 
-import std.conv, std.socket, std.concurrency, std.socketstream, std.stdio, core.thread, std.string, std.ascii;
+import std.conv, std.socket, std.concurrency, std.socketstream, std.stdio, core.thread, std.stream, std.string, std.ascii;
 
 import simpleserver.logger;
 
@@ -68,11 +68,27 @@ abstract class AbstractClientHandler: IClientHandler {
 		localAddress();
 	}
 	
-	void send(string msg){
+	void sendString(string msg){
 		stream.writeLine(msg);
 	}
 	
+	void sendBytes(const(ubyte[]) bytes){
+		stream.writeLine("+ACK THIS "~to!string(bytes.length));
+		string response = to!string(readLine());
+		if(response.startsWith("+ACK OK")){
+			stream.write(bytes);
+		}
+	}
+	
+	ulong readBytes(ubyte[] b, ulong size){
+		return stream.readBlock(cast(void*)b, size);
+	}
+	
 	string readLine(){
+		return readString();
+	}
+	
+	string readString(){
 		return to!string(stream.readLine());
 	}
 	
@@ -104,8 +120,11 @@ abstract class AbstractClientHandler: IClientHandler {
 }
 
 interface IClientHandler {
-	void 	send(string msg);
+	string 	readString();
 	string 	readLine();
+	void 	sendString(string msg);
+	void  	sendBytes(const(ubyte[]) bytes);
+	ulong 	readBytes(ubyte[] b, ulong size);
 	string 	remoteAddress();
 	string 	localAddress();
 	void 	setup(ref Socket socket, ClientData cd);
@@ -126,16 +145,16 @@ abstract class QuickAuthenticator: Authenticator {
 	this(){}
 	
 	string askStringInput(IClientHandler clientHandler, string prompt){
-		clientHandler.send(prompt);
+		clientHandler.sendString(prompt);
 		return getStringInput(clientHandler);
 	}
 	
 	string getStringInput(IClientHandler clientHandler){
-		return clientHandler.readLine();
+		return to!string(clientHandler.readLine());
 	}
 	
 	void sendString(IClientHandler clientHandler, string message){
-		clientHandler.send(message);
+		clientHandler.sendString(message);
 	}
 }
 
@@ -243,7 +262,7 @@ class SimpleServer: Thread{
 						goto next;
 					}
 					
-					read = handler.readLine();
+					read = to!string(handler.readLine());
 					
 					if(read.length==0){
 						closeSocket(handler);
@@ -305,7 +324,7 @@ class SimpleServer: Thread{
 							goto close;
 						}
 					}else{
-						handler.send(Authenticator.AUTH_OK~": Welcome.");
+						handler.sendString(Authenticator.AUTH_OK~": Welcome.");
 					}
 					
 					logger.info("Connection from "~handler.remoteAddress()~" established.");
@@ -474,10 +493,10 @@ class SimpleServer: Thread{
 
 class AdminAuthenticator: QuickAuthenticator {
 	bool askAuthorisation(IClientHandler clientHandler){
-		clientHandler.send("+OK --------------------------------------");
-		clientHandler.send("+OK This server requires authentication!");
-		clientHandler.send("+OK");
-		clientHandler.send("+OK --------------------------------------");
+		clientHandler.sendString("+OK --------------------------------------");
+		clientHandler.sendString("+OK This server requires authentication!");
+		clientHandler.sendString("+OK");
+		clientHandler.sendString("+OK --------------------------------------");
 		
 		string username = askStringInput(clientHandler, "+OK Username required");
 		string password = askStringInput(clientHandler, "+OK Password required");
@@ -503,11 +522,11 @@ class AdminClientCommandHandler: AbstractClientCommandHandler {
 	override void handleCommand(IClientHandler clientHandler, string command){
 		logger.info("Got message: "~command);
 		if("version" == command)
-			clientHandler.send("+OK "~getServer().getVersionNumber());
+			clientHandler.sendString("+OK "~getServer().getVersionNumber());
 		else if("noclient server" == command)
-			clientHandler.send("+OK "~to!string(getServer().getNumberOfClients()));
+			clientHandler.sendString("+OK "~to!string(getServer().getNumberOfClients()));
 		else
-			clientHandler.send("-ERR Unknown command");
+			clientHandler.sendString("-ERR Unknown command");
 	}
 	
 	override void closingConnection(IClientHandler socket){

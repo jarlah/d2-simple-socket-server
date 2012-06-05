@@ -22,6 +22,23 @@ module simpleserver.logger;
 
 import std.conv, std.socket, std.stdio, core.thread, std.datetime, std.file, std.string,std.regex;
 
+/**
+ * Should use library function but regex is too hard to understand.
+ * This has been taken from d lang forum.
+ * */
+string[] explode(in string source, char separator) {
+	typeof(return) result;
+	size_t prev = 0;
+	foreach (i, c; source) {
+		if (c == separator) {
+			result ~= source[prev .. i];
+			prev = i + 1;
+		}
+	}
+	result ~= source[prev .. $];
+	return result;
+}
+
 interface ILogger {
 	void info(string msg);
 	void error(string msg);
@@ -125,23 +142,6 @@ abstract class AbstractLogger: ILogger {
 		logLevel = properties["simpleserver.logger.level"];
 		logAll = logLevel == LogLevel.ALL;
 		disableLog = logLevel == LogLevel.OFF;
-	}
-	
-	/**
-	 * Should use library function but regex is too hard to understand.
-	 * This has been taken from d lang forum.
-	 * */
-	private string[] explode(in string source, char separator) {
-		typeof(return) result;
-		size_t prev = 0;
-		foreach (i, c; source) {
-			if (c == separator) {
-				result ~= source[prev .. i];
-				prev = i + 1;
-			}
-		}
-		result ~= source[prev .. $];
-		return result;
 	}
 	
 	public abstract string dateStringImpl(SysTime systime);
