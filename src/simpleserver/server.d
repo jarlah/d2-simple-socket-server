@@ -89,10 +89,6 @@ abstract class AbstractClientHandler: IClientHandler {
 		}
 	}
 	
-	ulong readBytes(ubyte[] b, ulong size){
-		return stream.readBlock(cast(void*)b, size);
-	}
-	
 	string readLine(){
 		return readString();
 	}
@@ -133,7 +129,6 @@ interface IClientHandler {
 	string 	readLine();
 	void 	sendString(string msg);
 	void  	sendBytes(const(ubyte[]) bytes);
-	ulong 	readBytes(ubyte[] b, ulong size);
 	string 	remoteAddress();
 	string 	localAddress();
 	void 	setup(ref Socket socket, ClientData cd);
