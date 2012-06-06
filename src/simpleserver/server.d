@@ -52,6 +52,8 @@ class DefaultClientHandler: AbstractClientHandler {
 	this(){}
 }
 
+import std.base64;
+
 abstract class AbstractClientHandler: IClientHandler {
 	Socket socket;
 	SocketStream stream;
@@ -73,10 +75,17 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	void sendBytes(const(ubyte[]) bytes){
-		stream.writeLine("+ACK THIS "~to!string(bytes.length));
+		stream.writeLine("+RCV BASE64 "~Base64.encode(bytes));
 		string response = to!string(readLine());
-		if(response.startsWith("+ACK OK")){
-			stream.write(bytes);
+		if(response.startsWith("+RCV OK")){
+			logger.info("Successfully sent bytes to the client");
+		}else if(response.startsWith("+RCV ERR ")){
+			string chomped = strip(chompPrefix(response,"+RCV ERR "));
+			if(chomped.length > 0){
+				logger.error("An error occured on the client while receiving the bytes: "~chomped);
+			}else{
+				logger.error("An unknown error occured on the client while receiving the bytes");
+			}
 		}
 	}
 	
