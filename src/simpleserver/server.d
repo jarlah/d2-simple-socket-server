@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 module simpleserver.server;
 
-import std.conv, std.socket, std.concurrency, std.socketstream, std.stdio, core.thread, std.stream, std.string, std.ascii;
+import std.conv, std.socket, std.concurrency, std.socketstream, std.stdio, core.thread, std.stream, std.string, std.ascii, std.base64;
 
 import simpleserver.logger;
 
@@ -52,22 +52,16 @@ class DefaultClientHandler: AbstractClientHandler {
 	this(){}
 }
 
-import std.base64;
-
 abstract class AbstractClientHandler: IClientHandler {
-	Socket socket;
-	SocketStream stream;
-	ClientData clientData = null;
-	string _remoteAddress = null, _localAddress = null;
-	
+	public:
 	this(){}
 	
 	void setup(ref Socket sock, ClientData cd){
 		this.socket = sock;
 		this.stream = new SocketStream(sock);
 		this.clientData = cd;
-		remoteAddress();
-		localAddress();
+		this._remoteAddress = remoteAddress();
+		this._localAddress = localAddress();
 	}
 	
 	void sendString(string msg){
@@ -98,15 +92,17 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	string remoteAddress(){
-		if(_remoteAddress is null)
-			_remoteAddress = to!string(socket.remoteAddress().toString());
-		return _remoteAddress;
+		string toreturn = _remoteAddress;
+		if(toreturn is null)
+			toreturn = to!string(socket.remoteAddress().toString());
+		return toreturn;
 	}
 	
 	string localAddress(){
-		if(_localAddress is null)
-			_localAddress = to!string(socket.localAddress().toString());
-		return _localAddress;
+		string toreturn = _localAddress;
+		if(toreturn is null)
+			toreturn = to!string(socket.localAddress().toString());
+		return toreturn;
 	}
 	
 	void close(){
@@ -119,30 +115,37 @@ abstract class AbstractClientHandler: IClientHandler {
 	
 	ClientData getClientData(){
 		if(clientData is null)
-			throw new Exception("There are no client data on the client handler!");
+			throw new Exception("There are no client data object on the client handler!");
 		return clientData;
 	}
+	
+	private:
+	Socket socket;
+	SocketStream stream;
+	ClientData clientData;
+	string _remoteAddress;
+	string _localAddress;
 }
 
 interface IClientHandler {
-	string 	readString();
-	string 	readLine();
-	void 	sendString(string msg);
-	void  	sendBytes(const(ubyte[]) bytes);
-	string 	remoteAddress();
-	string 	localAddress();
-	void 	setup(ref Socket socket, ClientData cd);
-	Socket 	getSocket();
-	ClientData getClientData();
-	void 	close();
+	string 		readString();
+	string 		readLine();
+	void 		sendString(string msg);
+	void  		sendBytes(const(ubyte[]) bytes);
+	string 		remoteAddress();
+	string 		localAddress();
+	void 		setup(ref Socket socket, ClientData cd);
+	Socket 		getSocket();
+	ClientData 	getClientData();
+	void 		close();
 }
 
 interface ClientData {}
 
 interface Authenticator { 
-	bool askAuthorisation(IClientHandler handler); 
-	static string AUTH_OK = "AUTH OK";
-	static string AUTH_ERR = "AUTH ERR";
+	bool 		askAuthorisation(IClientHandler handler); 
+	static 		string AUTH_OK = "AUTH OK";
+	static 		string AUTH_ERR = "AUTH ERR";
 }
 
 abstract class QuickAuthenticator: Authenticator {	
@@ -163,10 +166,6 @@ abstract class QuickAuthenticator: Authenticator {
 }
 
 class SimpleServer: Thread{
-	private SimpleServer service;
-	private bool isServerStarted = false;
-	private SimpleServer adminServer = null;
-	
 	public:
 	this(){
 		super( &run );
@@ -178,17 +177,14 @@ class SimpleServer: Thread{
 	
 	void startServer(ref SimpleServer server){
 		this.service = server;
-		start();
 		isServerStarted = true;
+		this.start();
 	}
 	
-	void startAdminServer()
-	in {
+	void startAdminServer() in {
 		enforce(isServerStarted is true, "Admin service cannot be started before the main service");
 		enforce(adminServer is null, "Admin service is already started");
-	}
-	body
-	{
+	} body {
 		adminServer =  new SimpleServer();
 		adminServer.setCommandHandler("simpleserver.server.AdminClientCommandHandler");
 		adminServer.setAuthenticator("simpleserver.server.AdminAuthenticator");
@@ -196,7 +192,6 @@ class SimpleServer: Thread{
 		adminServer.setHost(host);
 		adminServer.setName(adminName);
 		adminServer.disableLog();
-		writeln("Starting "~adminServer.name); 
 		adminServer.startServer(this.service);
 	}
 	
@@ -252,27 +247,22 @@ class SimpleServer: Thread{
 					break;
 					
 				auto sock = handlers.keys[i];
-				
 				if (sset.isSet(sock))
 				{
 					auto handler = handlers[sock];
-					
 					enforce(handler);
-					
-					string read;
-					
+
 					scope(failure){
 						closeSocket(handler);
 						goto next;
 					}
-					
-					read = to!string(handler.readLine());
-					
+
+					string read = to!string(handler.readLine());
 					if(read.length==0){
 						closeSocket(handler);
 						goto next;
 					}
-					
+
 					logger.info(to!string("Received "~to!string(read.length)~"bytes from "~handler.remoteAddress()~": \""~read~"\""));
 
 					try{
@@ -287,22 +277,18 @@ class SimpleServer: Thread{
 			if (sset.isSet(listener))
 			{
 				Socket sn;
-
 				if (handlers.length < MAX)
 				{
 					scope(failure)
 						goto close;
-					
+
 					sn = listener.accept();
-					
 					sn.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, socketTimeout);
-					
 					assert(sn.isAlive);
 					assert(listener.isAlive);
-					
+
 					logger.info("Loading socket handler class "~socketHandlerClass);
 					IClientHandler handler = cast(IClientHandler)Object.factory(socketHandlerClass);
-					
 					ClientData clientData = null;
 					if(clientDataClass !is null){
 						logger.info("Loading client data class "~clientDataClass);
@@ -310,17 +296,15 @@ class SimpleServer: Thread{
 					}
 					
 					handler.setup(sn, clientData);
-					
+
 					if(authHandler !is null){
 						bool authorized;
-						
 						try{
 							authorized = authHandler.askAuthorisation(handler);
 						}catch(Exception e){
 							logger.error(e.toString());
 							authorized = false;
 						}
-						
 						if(authorized){
 							logger.info("User authenticated");
 						}else{
@@ -330,7 +314,7 @@ class SimpleServer: Thread{
 					}else{
 						handler.sendString(Authenticator.AUTH_OK~": Welcome.");
 					}
-					
+
 					logger.info("Connection from "~handler.remoteAddress()~" established.");
 					commandHandler.gotConnected(handler);
 					handlers[sn] = handler;
@@ -342,7 +326,7 @@ class SimpleServer: Thread{
 					assert(sn.isAlive);
 					commandHandler.gotRejected(sn);
 					logger.warning("Rejected connection; too many connections.");
-					
+
 					close:
 					sn.close();
 					assert(!sn.isAlive);
@@ -356,66 +340,57 @@ class SimpleServer: Thread{
 		return this.commandHandler;
 	}
 	
-	void setCommandHandler(string handlerClass)
-	in{
+	void setCommandHandler(string handlerClass) in {
 		enforce("Command handler class cannot be null",handlerClass);
-	}body{
+	} body {
 		this.commandHandlerClass = handlerClass;
 	}
 	
-	void setSocketHandler(string handlerClass)
-	in{
+	void setSocketHandler(string handlerClass) in {
 		enforce("Socket handler class cannot be null",handlerClass);
-	}body{
+	} body {
 		this.socketHandlerClass = handlerClass;
 	}
 	
-	void setAuthenticator(string handlerClass)
-	in{
+	void setAuthenticator(string handlerClass) in {
 		enforce("Authenticator class cannot be null",handlerClass);
-	}body{
+	} body {
 		this.authHandlerClass = handlerClass;
 	}
 	
-	void setName(string name)
-	in{
+	void setName(string name) in {
 		enforce("Name cannot be null",name);
-	}body{
+	} body {
 		this.name = name;
 	}
 	
-	void setClientData(string clientData)
-	in{
+	void setClientData(string clientData) in {
 		enforce("Client data class cannot be null",clientData);
-	}body{
+	} body {
 		this.clientDataClass = clientData;
 	}
 	
-	void setPort(int port)
-	in{
+	void setPort(int port) in {
 		assert(port>0,"Port > 0");
-	}body{
+	} body {
 		this.port = port;
 	}
 	
-	void setHost(string host)
-	in{
+	void setHost(string host) in {
 		enforce("Host cannot be null",host);
-	}body{
+	} body {
 		this.host = host;
 	}
 	
-	void setMax(int max)
-	in{
+	void setMax(int max) in {
 		assert(max>1, "Max be larger than 0");
-	}body{
+	} body {
 		this.MAX = max;
 	}
 	
-	void setBacklog(int bl)
-	in{
+	void setBacklog(int bl) in {
 		assert(bl>1, "Backlog be larger than 0");
-	}body{
+	} body {
 		this.backlog = bl;
 	}
 	
@@ -424,7 +399,7 @@ class SimpleServer: Thread{
 		this.blocking = boolean;
 	}
 	
-	void setSocketTimeout(std.socket.Duration dur){
+	void setSocketTimeout(std.socket.Duration dur) {
 		this.socketTimeout = dur;
 	}
 	
@@ -440,12 +415,9 @@ class SimpleServer: Thread{
 		doNotLog = true;
 	}
 	
-	void setAdminPort(int port)
-	in {
+	void setAdminPort(int port) in {
 		assert(port !is this.port,"Admin port number cannot be the same as the server port number");
-	}
-	body
-	{
+	} body {
 		this.adminPort = port;
 	}
 	
@@ -454,43 +426,39 @@ class SimpleServer: Thread{
 	}
 	
 	private:
-	string versionNumber = "1.0.1-BETA";
-	int MAX = 120;
-	string host = "localhost";
-	int port = 1234;
-	int adminPort = 2345;
-	string name = "SimpleServer";
-	string adminName = "SimpleServer Admin";
-	bool blocking = false;
-	int backlog = 60;
-	bool doNotLog = false;
-	std.socket.Duration socketTimeout = dur!"seconds"(60);
-	string socketHandlerClass = "simpleserver.server.DefaultClientHandler";
-	string commandHandlerClass = null;
-	string authHandlerClass = null;
-	string clientDataClass = null;
-	IClientCommandHandler commandHandler = null;
+	auto versionNumber 			= "1.0.1";
+	auto MAX 					= 120;
+	auto host 					= "localhost";
+	auto port 					= 1234;
+	auto adminPort 				= 2345;
+	auto name 					= "SimpleServer";
+	auto adminName 				= "SimpleServer Admin";
+	auto blocking 				= false;
+	auto backlog 				= 60;
+	auto doNotLog 				= false;
+	auto socketTimeout 			= dur!"seconds"(60);
+	auto socketHandlerClass 	= "simpleserver.server.DefaultClientHandler";
+	auto isServerStarted 		= false;
+	string commandHandlerClass	= null;
+	string authHandlerClass		= null;
+	string clientDataClass 		= null;
+	Authenticator authHandler	= null;
+	SimpleServer service		= null;
+	SimpleServer adminServer	= null;
+	IClientCommandHandler commandHandler;
 	IClientHandler[Socket] handlers;
-	Authenticator authHandler = null;
 	
 	void closeSocket(IClientHandler handler){
 		commandHandler.closingConnection(handler);
-		
 		try
 		{
 			logger.warning("Connection from "~handler.remoteAddress()~" closed.");
-		}
-		catch (SocketException)
-		{
+		} catch (SocketException) {
 			logger.warning("Connection closed.");
 		}
-		
 		handler.close();
-		
 		handlers.remove(handler.getSocket);
-		
 		logger.info("\tTotal connections: "~to!string(handlers.length));
-		
 		commandHandler.lostConnection(handler);
 	}
 }

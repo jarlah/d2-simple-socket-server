@@ -31,10 +31,10 @@ int main(char[][] args)
 	mainServer.setClientData("echoserver.MyClientData");
 	mainServer.setPort(1234);
 	mainServer.setHost("localhost");
-	mainServer.setName("SimpleServer v1.0");
+	mainServer.setName("SimpleServer EchoService");
 	mainServer.startServer();
 	mainServer.setAdminPort(2345);
-	mainServer.setAdminName("QuickServer Admin compability server");
+	mainServer.setAdminName("SimpleServer AdminService");
 	mainServer.startAdminServer();
 	return 0;
 }
