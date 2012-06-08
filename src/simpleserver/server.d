@@ -26,145 +26,6 @@ import simpleserver.logger;
 
 ILogger logger;
 
-class AbstractClientCommandHandler: IClientCommandHandler {
-	SimpleServer server;
-	this(){}
-	void handleCommand(IClientHandler socket, string command){};
-	void gotConnected(IClientHandler socket){};
-	void gotRejected(Socket socket){};
-	void closingConnection(IClientHandler socket){};
-	void lostConnection(IClientHandler socket){};
-	void setServer(ref SimpleServer server){ this.server = server; }
-	SimpleServer getServer(){ return this.server; }
-}
-
-private interface IClientCommandHandler {
-	void gotConnected(IClientHandler handler);
-	void gotRejected(Socket socket);
-	void closingConnection(IClientHandler handler);
-	void lostConnection(IClientHandler handler);
-	void handleCommand(IClientHandler handler, string command);
-	void setServer(ref SimpleServer server);
-	SimpleServer getServer();
-}
-
-class DefaultClientHandler: AbstractClientHandler {
-	this(){}
-}
-
-abstract class AbstractClientHandler: IClientHandler {
-	public:
-	this(){}
-	
-	void setup(ref Socket sock, ClientData cd){
-		this.socket = sock;
-		this.stream = new SocketStream(sock);
-		this.clientData = cd;
-		this._remoteAddress = remoteAddress();
-		this._localAddress = localAddress();
-	}
-	
-	void sendString(string msg){
-		stream.writeLine(msg);
-	}
-	
-	void sendBytes(const(ubyte[]) bytes){
-		stream.writeLine("+RCV BASE64 "~Base64.encode(bytes));
-		string response = to!string(readLine());
-		if(response.startsWith("+RCV OK")){
-			logger.info("Successfully sent bytes to the client");
-		}else if(response.startsWith("+RCV ERR ")){
-			string chomped = strip(chompPrefix(response,"+RCV ERR "));
-			if(chomped.length > 0){
-				logger.error("An error occured on the client while receiving the bytes: "~chomped);
-			}else{
-				logger.error("An unknown error occured on the client while receiving the bytes");
-			}
-		}
-	}
-	
-	string readLine(){
-		return readString();
-	}
-	
-	string readString(){
-		return to!string(stream.readLine());
-	}
-	
-	string remoteAddress(){
-		string toreturn = _remoteAddress;
-		if(toreturn is null)
-			toreturn = to!string(socket.remoteAddress().toString());
-		return toreturn;
-	}
-	
-	string localAddress(){
-		string toreturn = _localAddress;
-		if(toreturn is null)
-			toreturn = to!string(socket.localAddress().toString());
-		return toreturn;
-	}
-	
-	void close(){
-		stream.close();
-	}
-	
-	Socket getSocket(){
-		return socket;
-	}
-	
-	ClientData getClientData(){
-		if(clientData is null)
-			throw new Exception("There are no client data object on the client handler!");
-		return clientData;
-	}
-	
-	private:
-	Socket socket;
-	SocketStream stream;
-	ClientData clientData;
-	string _remoteAddress;
-	string _localAddress;
-}
-
-interface IClientHandler {
-	string 		readString();
-	string 		readLine();
-	void 		sendString(string msg);
-	void  		sendBytes(const(ubyte[]) bytes);
-	string 		remoteAddress();
-	string 		localAddress();
-	void 		setup(ref Socket socket, ClientData cd);
-	Socket 		getSocket();
-	ClientData 	getClientData();
-	void 		close();
-}
-
-interface ClientData {}
-
-interface Authenticator { 
-	bool 		askAuthorisation(IClientHandler handler); 
-	static 		string AUTH_OK = "AUTH OK";
-	static 		string AUTH_ERR = "AUTH ERR";
-}
-
-abstract class QuickAuthenticator: Authenticator {	
-	this(){}
-	
-	string askStringInput(IClientHandler clientHandler, string prompt){
-		clientHandler.sendString(prompt);
-		return getStringInput(clientHandler);
-	}
-	
-	string getStringInput(IClientHandler clientHandler){
-		return to!string(clientHandler.readLine());
-	}
-	
-	void sendString(IClientHandler clientHandler, string message){
-		clientHandler.sendString(message);
-	}
-}
-
 class SimpleServer: Thread{
 	public:
 	this(){
@@ -463,6 +324,146 @@ class SimpleServer: Thread{
 	}
 }
 
+class AbstractClientCommandHandler: IClientCommandHandler {
+	SimpleServer server;
+	this(){}
+	void handleCommand(IClientHandler socket, string command){};
+	void gotConnected(IClientHandler socket){};
+	void gotRejected(Socket socket){};
+	void closingConnection(IClientHandler socket){};
+	void lostConnection(IClientHandler socket){};
+	void setServer(ref SimpleServer server){ this.server = server; }
+	SimpleServer getServer(){ return this.server; }
+}
+
+interface IClientCommandHandler {
+	void gotConnected(IClientHandler handler);
+	void gotRejected(Socket socket);
+	void closingConnection(IClientHandler handler);
+	void lostConnection(IClientHandler handler);
+	void handleCommand(IClientHandler handler, string command);
+	void setServer(ref SimpleServer server);
+	SimpleServer getServer();
+}
+
+class DefaultClientHandler: AbstractClientHandler {
+	this(){}
+}
+
+abstract class AbstractClientHandler: IClientHandler {
+	public:
+	this(){}
+	
+	void setup(ref Socket sock, ClientData cd){
+		this.socket = sock;
+		this.stream = new SocketStream(sock);
+		this.clientData = cd;
+		this._remoteAddress = remoteAddress();
+		this._localAddress = localAddress();
+	}
+	
+	void sendString(string msg){
+		stream.writeLine(msg);
+	}
+	
+	void sendBytes(const(ubyte[]) bytes){
+		stream.writeLine("+RCV BASE64 "~Base64.encode(bytes));
+		string response = to!string(readLine());
+		if(response.startsWith("+RCV OK")){
+			logger.info("Successfully sent bytes to the client");
+		}else if(response.startsWith("+RCV ERR ")){
+			string chomped = strip(chompPrefix(response,"+RCV ERR "));
+			if(chomped.length > 0){
+				logger.error("An error occured on the client while receiving the bytes: "~chomped);
+			}else{
+				logger.error("An unknown error occured on the client while receiving the bytes");
+			}
+		}
+	}
+	
+	string readLine(){
+		return readString();
+	}
+	
+	string readString(){
+		return to!string(stream.readLine());
+	}
+	
+	string remoteAddress(){
+		string toreturn = _remoteAddress;
+		if(toreturn is null)
+			toreturn = to!string(socket.remoteAddress().toString());
+		return toreturn;
+	}
+	
+	string localAddress(){
+		string toreturn = _localAddress;
+		if(toreturn is null)
+			toreturn = to!string(socket.localAddress().toString());
+		return toreturn;
+	}
+	
+	void close(){
+		stream.close();
+	}
+	
+	Socket getSocket(){
+		return socket;
+	}
+	
+	ClientData getClientData(){
+		if(clientData is null)
+			throw new Exception("There are no client data object on the client handler!");
+		return clientData;
+	}
+	
+	private:
+	Socket socket;
+	SocketStream stream;
+	ClientData clientData;
+	string _remoteAddress;
+	string _localAddress;
+}
+
+interface IClientHandler {
+	string 		readString();
+	string 		readLine();
+	void 		sendString(string msg);
+	void  		sendBytes(const(ubyte[]) bytes);
+	string 		remoteAddress();
+	string 		localAddress();
+	void 		setup(ref Socket socket, ClientData cd);
+	Socket 		getSocket();
+	ClientData 	getClientData();
+	void 		close();
+}
+
+interface ClientData {}
+
+interface Authenticator { 
+	bool 		askAuthorisation(IClientHandler handler); 
+	static 		string AUTH_OK = "AUTH OK";
+	static 		string AUTH_ERR = "AUTH ERR";
+}
+
+abstract class QuickAuthenticator: Authenticator {	
+	this(){}
+	
+	string askStringInput(IClientHandler clientHandler, string prompt){
+		clientHandler.sendString(prompt);
+		return getStringInput(clientHandler);
+	}
+	
+	string getStringInput(IClientHandler clientHandler){
+		return to!string(clientHandler.readLine());
+	}
+	
+	void sendString(IClientHandler clientHandler, string message){
+		clientHandler.sendString(message);
+	}
+}
+
+private:
 class AdminAuthenticator: QuickAuthenticator {
 	bool askAuthorisation(IClientHandler clientHandler){
 		clientHandler.sendString("+OK --------------------------------------");
@@ -485,7 +486,6 @@ class AdminAuthenticator: QuickAuthenticator {
         }
 	}
 }
-
 class AdminClientCommandHandler: AbstractClientCommandHandler {
 	this(){
 		super();
