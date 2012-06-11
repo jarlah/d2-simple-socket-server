@@ -18,24 +18,26 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+module simpleserver.example;
+
 import std.conv, std.string, std.socket, std.stdio, core.thread, std.concurrency, std.base64;
 
 import simpleserver.server;
 
 int main(char[][] args)
 {
-	SimpleServer mainServer =  new SimpleServer();
-	mainServer.setCommandHandler("echoserver.SimpleClientCommandHandler");
-	mainServer.setAuthenticator("echoserver.DummyAuthenticator");
-	mainServer.setSocketHandler("simpleserver.server.DefaultClientHandler");
-	mainServer.setClientData("echoserver.MyClientData");
-	mainServer.setPort(1234);
-	mainServer.setHost("localhost");
-	mainServer.setName("SimpleServer EchoService");
-	mainServer.startServer();
-	mainServer.setAdminPort(2345);
-	mainServer.setAdminName("SimpleServer AdminService");
-	mainServer.startAdminServer();
+	Server server = createSimpleServer();
+	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
+	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
+	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
+	server.setClientData("simpleserver.example.MyClientData");
+	server.setPort(1234);
+	server.setHost("localhost");
+	server.setName("SimpleServer EchoService");
+	server.startServer();
+	server.setAdminPort(2345);
+	server.setAdminName("SimpleServer AdminService");
+	server.startAdminServer();
 	return 0;
 }
 

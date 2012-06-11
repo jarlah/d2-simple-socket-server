@@ -26,17 +26,44 @@ import simpleserver.logger;
 
 ILogger logger;
 
-class SimpleServer: Thread{
+abstract class Server: Thread {
+	this(void delegate() fn){
+		super(fn);
+	}
+	void startServer();
+	void startServer(ref Server server);
+	void startAdminServer();
+	void disableLog();
+	void setHost(string host);
+	void setPort(int port);
+	void setAdminPort(int port);
+	void setName(string name);
+	void setAdminName(string name);
+	void setAuthenticator(string handlerClass);
+	void setCommandHandler(string handlerClass);
+	void setSocketHandler(string handlerClass);
+	void setClientData(string clientData);
+	string getVersionNumber();
+	ulong getNumberOfClients();
+}
+
+Server createSimpleServer()
+{
+	return new SimpleServer();
+}
+
+class SimpleServer: Server{
 	public:
 	this(){
 		super( &run );
 	}
-		
-	void startServer(){
-		startServer(this);
+	
+	override void startServer(){
+		Server casted = cast(Server)this;
+		startServer(casted);
 	}
 	
-	void startServer(ref SimpleServer server){
+	override void startServer(ref Server server){
 		this.service = server;
 		isServerStarted = true;
 		this.start();
@@ -46,14 +73,14 @@ class SimpleServer: Thread{
 		enforce(isServerStarted is true, "Admin service cannot be started before the main service");
 		enforce(adminServer is null, "Admin service is already started");
 	} body {
-		adminServer =  new SimpleServer();
+		adminServer = createSimpleServer();
 		adminServer.setCommandHandler("simpleserver.server.AdminClientCommandHandler");
 		adminServer.setAuthenticator("simpleserver.server.AdminAuthenticator");
 		adminServer.setPort(adminPort);
 		adminServer.setHost(host);
 		adminServer.setName(adminName);
 		adminServer.disableLog();
-		adminServer.startServer(this.service);
+		adminServer.startServer(cast(Server)this.service);
 	}
 	
 	void run(){
@@ -201,33 +228,23 @@ class SimpleServer: Thread{
 		return this.commandHandler;
 	}
 	
-	void setCommandHandler(string handlerClass) in {
-		enforce("Command handler class cannot be null",handlerClass);
-	} body {
+	override void setCommandHandler(string handlerClass) {
 		this.commandHandlerClass = handlerClass;
 	}
 	
-	void setSocketHandler(string handlerClass) in {
-		enforce("Socket handler class cannot be null",handlerClass);
-	} body {
+	override void setSocketHandler(string handlerClass) {
 		this.socketHandlerClass = handlerClass;
 	}
 	
-	void setAuthenticator(string handlerClass) in {
-		enforce("Authenticator class cannot be null",handlerClass);
-	} body {
+	override void setAuthenticator(string handlerClass) {
 		this.authHandlerClass = handlerClass;
 	}
 	
-	void setName(string name) in {
-		enforce("Name cannot be null",name);
-	} body {
+	override void setName(string name) {
 		this.name = name;
 	}
 	
-	void setClientData(string clientData) in {
-		enforce("Client data class cannot be null",clientData);
-	} body {
+	override void setClientData(string clientData) {
 		this.clientDataClass = clientData;
 	}
 	
@@ -272,7 +289,7 @@ class SimpleServer: Thread{
 		return handlers.length;
 	}
 	
-	void disableLog(){
+	override void disableLog(){
 		doNotLog = true;
 	}
 	
@@ -304,8 +321,8 @@ class SimpleServer: Thread{
 	string authHandlerClass		= null;
 	string clientDataClass 		= null;
 	Authenticator authHandler	= null;
-	SimpleServer service		= null;
-	SimpleServer adminServer	= null;
+	Server service				= null;
+	Server adminServer			= null;
 	IClientCommandHandler commandHandler;
 	IClientHandler[Socket] handlers;
 	
@@ -325,15 +342,15 @@ class SimpleServer: Thread{
 }
 
 class AbstractClientCommandHandler: IClientCommandHandler {
-	SimpleServer server;
+	Server server;
 	this(){}
 	void handleCommand(IClientHandler socket, string command){};
 	void gotConnected(IClientHandler socket){};
 	void gotRejected(Socket socket){};
 	void closingConnection(IClientHandler socket){};
 	void lostConnection(IClientHandler socket){};
-	void setServer(ref SimpleServer server){ this.server = server; }
-	SimpleServer getServer(){ return this.server; }
+	void setServer(ref Server server){ this.server = server; }
+	Server getServer(){ return this.server; }
 }
 
 interface IClientCommandHandler {
@@ -342,8 +359,8 @@ interface IClientCommandHandler {
 	void closingConnection(IClientHandler handler);
 	void lostConnection(IClientHandler handler);
 	void handleCommand(IClientHandler handler, string command);
-	void setServer(ref SimpleServer server);
-	SimpleServer getServer();
+	void setServer(ref Server server);
+	Server getServer();
 }
 
 class DefaultClientHandler: AbstractClientHandler {
