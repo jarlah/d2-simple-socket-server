@@ -6,3 +6,5 @@
 "src/echoserver.d"
 "src/simpleserver/logger.d"
 "src/simpleserver/server.d"
+"src/simpleserver/splat.d"
+"src/splatserver.d"

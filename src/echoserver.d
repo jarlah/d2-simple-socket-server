@@ -19,10 +19,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 module simpleserver.example;
-
 import std.conv, std.string, std.socket, std.stdio, core.thread, std.concurrency, std.base64;
-
 import simpleserver.server;
+import splatserver;
 
 int main(char[][] args)
 {
@@ -38,6 +37,8 @@ int main(char[][] args)
 	server.setAdminPort(2345);
 	server.setAdminName("SimpleServer AdminService");
 	server.startAdminServer();
+	auto t = new Thread(&splat);
+	t.start();
 	return 0;
 }
 
