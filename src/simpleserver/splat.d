@@ -34,7 +34,7 @@ private
 	}
 	
 	alias long spdTime;
-	alias std.datetime.Clock.currStdTime spdGetCurrentUtcTime;
+	alias std.datetime.Clock.currStdTime stdCurrentTime;
 	import std.socket;
 	alias std.socket.InternetHost spdInternetHost;
 	alias std.socket.InternetAddress spdInternetAddress;
@@ -42,14 +42,8 @@ private
 	alias std.socket.timeval spdTimeval;
 	import core.thread;
 	import std.conv;
-
-	debug(splat)
-	{
-		import std.c.stdio;
-	}
+	import std.c.stdio;
 }
-
-static assert(spdMyTimeval.sizeof == spdTimeval.sizeof);
 
 /**
 	Run the event loop; wait for timer and socket events.
@@ -60,12 +54,16 @@ void run()
 	_texit = false;
 	
 	Timer tn;
+	
 	spdMyTimeval* ptv;
 	spdMyTimeval tv;
 	spdTime dnow;
+
 	SocketSet reads = new SocketSet();
 	SocketSet writes = new SocketSet();
+
 	int i;
+
 	bool dotimer = false;
 	
 	for(;;)
@@ -80,25 +78,27 @@ void run()
 				DWORD ms = INFINITE;
 				if(tn)
 				{
-					dnow = spdGetCurrentUtcTime();
+					dnow = stdCurrentTime();
 					if(tn._talarm <= dnow)
 						goto timedout;
 					ms = _tticksToMs(cast(spdTime)(tn._talarm - dnow));
+					
 				}
 				
 				if(INFINITE == ms)
 				{
-					if(_areHosts())
+					if(_areHosts()){
 						ms = 200;
+					}
 				}
 				
-				debug(splat)
-				{
+//				debug(splat)
+//				{
 					if(INFINITE != ms)
 						printf("  {SLEEP} %lu ms\n", cast(uint)ms);
 					//else
 					//	printf("  {SLEEP} infinite\n");
-				}
+//				}
 				
 				Sleep(ms);
 				goto timedout;
@@ -108,8 +108,7 @@ void run()
 		ptv = null;
 		if(tn)
 		{
-			debug(splattimer)
-				printf("splattimer: diff = %d; dotimer = %s\n",
+			printf("splattimer: diff = %d; dotimer = %s\n",
 					cast(int)(dnow - tn._talarm),
 					dotimer ? "true".ptr : "false".ptr);
 			
@@ -132,7 +131,7 @@ void run()
 			}
 			else
 			{
-				dnow = spdGetCurrentUtcTime();
+				dnow = stdCurrentTime();
 				_tticksToTimeval(tn._talarm - dnow, &tv);
 				if(tv.microseconds < 0)
 					tv.microseconds = 0;
@@ -156,7 +155,7 @@ void run()
 		}
 		else
 		{
-			debug(splattimer)
+//			debug(splattimer)
 				printf("splattimer: no timers\n");
 			
 			if(_areHosts())
@@ -174,18 +173,18 @@ void run()
 		foreach(AsyncSocket sock; _tallEvents)
 		{
 			//debug
-			debug(splat)
-			{
+//			debug(splat)
+//			{
 				if(!sock.isAlive())
 				{
-					debug(splat)
-					{
+//					debug(splat)
+//					{
 						printf("Splat warning: dead socket still waiting for events\n");
 						fflush(stdout);
-					}
+//					}
 					//continue;
 				}
-			}
+//			}
 			
 			if(((sock._events & EventType.READ) && !(sock._events & EventType._CANNOT_READ))
 				|| ((sock._events & EventType.ACCEPT) && !(sock._events & EventType._CANNOT_ACCEPT))
@@ -210,29 +209,23 @@ void run()
 		{
 			if(!numadds)
 				goto no_socket_events;
-			
-			//assert(reads.count || writes.count);
 		}
 		
-		debug(splat)
-		{
+//		debug(splat)
+//		{
 			if(ptv)
 			{
 				if(0 != ptv.seconds || 0 != ptv.microseconds)
 					printf("  {SELECT} %lu secs, %lu microsecs\n", cast(uint)ptv.seconds, cast(uint)ptv.microseconds);
-				//else
-				//	printf("  {SELECT} 0\n");
 			}
-			//else
-			//{
-			//	printf("  {SELECT} infinite\n");
-			//}
-		}
+//		}
 		
-		debug(splatselect)
+//		debug(splatselect)
 			printf("Socket.select(%u sockets%s)\n", numadds,
 				ptv ? (((0 != ptv.seconds || 0 != ptv.microseconds)) ? ", timeout".ptr : ", 0 timeout") : ", infinite-wait".ptr);
+
 		i = Socket.select(reads, writes, null, cast(spdTimeval*)ptv);
+
 		switch(i)
 		{
 			case -1: // Interruption.
@@ -242,13 +235,15 @@ void run()
 				goto timedout;
 			
 			default: // Socket event(s).
-				foreach(AsyncSocket sock; _tallEvents)
+				foreach(socket_t key; _tallEvents.keys)
 				{
+					AsyncSocket sock = _tallEvents[key];
+					
 					if(_texit)
 						return;
 					
-					//if(!sock.isAlive())
-					//	continue;
+					if(!sock.isAlive())
+						continue;
 					
 					if(reads.isSet(sock))
 					{
@@ -263,21 +258,17 @@ void run()
 									}
 									else
 									{
-										//sock._events |= EventType._CANNOT_READ;
 										sock._events |= EventType._CANNOT_CLOSE | EventType._CANNOT_READ; // ?
-										//sock._tgotEvent(EventType.READ, 0); // Should this be an error?
 									}
 									break;
 								case -1: // Error.
 									if((sock._events & EventType.CLOSE) && !(sock._events & EventType._CANNOT_CLOSE))
 									{
-										//sock._events |= EventType._CANNOT_READ;
 										sock._events |= EventType._CANNOT_CLOSE | EventType._CANNOT_READ; // ?
 										sock._tgotEvent(EventType.CLOSE, -1); // ?
 									}
 									else
 									{
-										//sock._events |= EventType._CANNOT_READ;
 										sock._events |= EventType._CANNOT_CLOSE | EventType._CANNOT_READ; // ?
 										sock._tgotEvent(EventType.READ, -1);
 									}
@@ -293,20 +284,17 @@ void run()
 							{
 								case 0: // Close.
 									got_close:
-									//sock._events |= EventType._CANNOT_CLOSE;
 									sock._events |= EventType._CANNOT_CLOSE | EventType._CANNOT_READ; // ?
-									//writes.remove(sock); // ?
 									sock._tgotEvent(EventType.CLOSE, 0);
 									break;
 								case -1: // Error.
-									//sock._events |= EventType._CANNOT_CLOSE;
 									sock._events |= EventType._CANNOT_CLOSE | EventType._CANNOT_READ; // ?
-									//writes.remove(sock); // ?
 									sock._tgotEvent(EventType.CLOSE, -1);
 									break;
 								default: ;
 							}
 						}
+						
 						
 						if((sock._events & EventType.ACCEPT) && !(sock._events & EventType._CANNOT_ACCEPT))
 						{
@@ -317,8 +305,8 @@ void run()
 						continue; // Checking for writability (otherwise next) on a closed socket (from any above event) is problematic.
 					}
 					
-					//if(_texit)
-					//	return;
+					if(_texit)
+						return;
 					
 					if(writes.isSet(sock))
 					{
@@ -374,7 +362,7 @@ private void _tdotimers()
 	Timer[4] talarms;
 	spdTime dnow;
 	Timer tn;
-	dnow = spdGetCurrentUtcTime();
+	dnow = stdCurrentTime();
 	for(tn = _tfirst; tn; tn = tn._tnext)
 	{
 		if(dnow >= tn._talarm)
@@ -416,7 +404,7 @@ private void _tdotimers()
 			if(t._talarm != t._TALARM_INIT) // Maybe removed itself.
 			{
 				// Set new alarm after this alarm due to possible delay AND possible updated timeout/interval.
-				dnow = spdGetCurrentUtcTime(); // In case time lapses in some other timer event.
+				dnow = stdCurrentTime(); // In case time lapses in some other timer event.
 				t._talarm = cast(spdTime)(dnow + t._ttimeout);
 			}
 		}
@@ -462,10 +450,10 @@ class Timer
 		
 		_tadd(this);
 		
-		debug(splat)
-		{
+//		debug(splat)
+//		{
 			printf("  {ADDTIMER:%p} %lu ms\n", cast(void*)this, interval);
-		}
+//		}
 	}
 	
 	
@@ -476,10 +464,10 @@ class Timer
 		{
 			_tremove(this);
 			
-			debug(splat)
-			{
+//			debug(splat)
+//			{
 				printf("  {DELTIMER:%p} %lu ms\n", cast(void*)this, interval);
-			}
+//			}
 		}
 	}
 	
@@ -509,7 +497,6 @@ class Timer
 	private:
 	const spdTime _TALARM_INIT = cast(spdTime)0;
 	spdTime _talarm = _TALARM_INIT; // Time when next event is alarmed.
-	//spdTime _ttimeout; // Ticks per timeout.
 	uint _ttimeout; // Ticks per timeout.
 	Timer _tprev, _tnext;
 	void delegate(Timer) _tick;
@@ -517,10 +504,10 @@ class Timer
 	
 	void _tgotAlarm()
 	{
-		debug(splat)
-		{
+//		debug(splat)
+//		{
 			printf("  {TIMER:%p}\n", cast(void*)this);
-		}
+//		}
 		
 		onAlarm();
 	}
@@ -624,9 +611,11 @@ class AsyncSocket: Socket
 	
 	override void close()
 	{
+		std.stdio.writeln(_tallEvents);
 		_events = EventType.NONE;
 		_tallEvents.remove(this.handle);
-		return super.close();
+		std.stdio.writeln(_tallEvents);
+		super.close();
 	}
 	
 	
@@ -677,7 +666,6 @@ class AsyncSocket: Socket
 		_events &= ~EventType._CANNOT_READ;
 		return super.receiveFrom(buf);
 	}
-	
 	
 	override long send(const(void)[] buf, SocketFlags flags)
 	{
@@ -753,8 +741,8 @@ class AsyncSocket: Socket
 	
 	void _tgotEvent(EventType type, int err)
 	{
-		debug(splat)
-		{
+//		debug(splat)
+//		{
 			if(type == EventType.READ)
 				printf("  {READ:%p}\n", cast(void*)this);
 			else if(type == EventType.WRITE)
@@ -765,7 +753,7 @@ class AsyncSocket: Socket
 				printf("  {CLOSE:%p}\n", cast(void*)this);
 			else if(type == EventType.ACCEPT)
 				printf("  {ACCEPT:%p}\n", cast(void*)this);
-		}
+//		}
 		
 		if(_callback)
 			_callback(this, type, err);
@@ -977,10 +965,10 @@ version(THSLEEP)
 
 private void _tgethost(GetHost gh)
 {
-	debug(splat)
-	{
+//	debug(splat)
+//	{
 		printf("  {GETHOST:%p}\n", cast(void*)gh);
-	}
+//	}
 	
 	//synchronized
 	{
@@ -1009,10 +997,10 @@ private void _tgethost(GetHost gh)
 				}
 				else
 				{
-					debug(splat)
-					{
+//					debug(splat)
+//					{
 						printf("  {RESUMING:_ththreadproc}\n");
-					}
+//					}
 					
 					_ththread.resume();
 				}
@@ -1048,17 +1036,17 @@ private void _dothreadproc()
 			}
 			else
 			{
-				debug(splat)
-				{
+//				debug(splat)
+//				{
 					printf("  {PAUSE:_ththreadproc}\n");
-				}
+//				}
 				
 				_ththread.pause();
 				
-				debug(splat)
-				{
+//				debug(splat)
+//				{
 					printf("  {RESUMED:_ththreadproc}\n");
-				}
+//				}
 			}
 			continue;
 		}
@@ -1079,10 +1067,10 @@ private void _dothreadproc()
 						gh._tinetHost = ih;
 				}
 				
-				debug(splat)
-				{
+//				debug(splat)
+//				{
 					printf("  {GOTHOST:%p} %s\n", cast(void*)gh, gh._tinetHost ? "true".ptr : "false".ptr);
-				}
+//				}
 			}
 			catch
 			{
@@ -1105,10 +1093,10 @@ private void _thpn(GetHost gh)
 	{
 		assert(gh is _thnext);
 		
-		debug(splat)
-		{
+//		debug(splat)
+//		{
 			printf("  {DONEHOST:%p}\n", cast(void*)gh);
-		}
+//		}
 		
 		_thnext = _thnext._tnext;
 		if(!_thnext)
@@ -1183,14 +1171,11 @@ class SocketQueue
 		readbuf = null;
 	}
 	
-	
-	/+
 	// DMD 0.92 says error: function toString overrides but is not covariant with toString
-	override char[] toString()
+	override string toString()
 	{
-		return cast(char[])peek();
+		return cast(string)peek();
 	}
-	+/
 	
 	
 	/// Peek at some or all of the received data but leave it in the queue. May return less than requested.
@@ -1362,24 +1347,21 @@ class SocketQueue
 	ubyte[] readbuf;
 	uint rpos;
 	Socket sock;
-	//bool canwrite = false;
 	
 	
-	bool canwrite() // getter
+	bool canwrite()
 	{
 		return writebuf.length == 0;
 	}
 }
 
 
-/// Returns the number of asynchronous sockets waiting for events.
 size_t getNumberOfAsyncSockets()
 {
 	return _tallEvents.length;
 }
 
 
-/// Returns the number of active timers.
 size_t getNumberOfTimers()
 {
 	return _tcount;
@@ -1394,7 +1376,6 @@ size_t _tcount = 0;
 
 Timer _tnext()
 {
-	//spdTime lowest = spdTime.max; // Wrong in Tango 0.99.2.
 	spdTime lowest = cast(spdTime)((spdTime.init + 0).max); // + 1 converts to the underlying arithmetic type to get the real max.
 	Timer t, tlowest;
 	for(t = _tfirst; t; t = t._tnext)
@@ -1420,7 +1401,7 @@ in
 }
 body
 {
-	t._talarm = cast(spdTime)(spdGetCurrentUtcTime() + t._ttimeout);
+	t._talarm = cast(spdTime)(stdCurrentTime() + t._ttimeout);
 	
 	t._tprev = _tlast;
 	_tlast = t;
@@ -1467,9 +1448,6 @@ template _tTicks()
 	{
 		uint _tticksToSecs(spdTime ticks) { return cast(uint)(ticks / 1000); }
 		uint _tticksToMs(spdTime ticks) { return cast(uint)ticks; }
-		//uint _tticksToNs(spdTime ticks) { return cast(uint)(ticks / spdTICKS_PER_SECOND * 1_000_000_000); }
-		//uint _tticksToNs(spdTime ticks) { return cast(uint)(cast(double)ticks / cast(double)spdTICKS_PER_SECOND * cast(double)1_000_000_000); }
-		//uint _tticksToMicrosecs(spdTime ticks) { return cast(uint)(ticks / spdTICKS_PER_SECOND * 1_000_000); }
 		uint _tticksToMicrosecs(spdTime ticks) { return cast(uint)(cast(double)ticks / cast(double)1000 * cast(double)1_000_000); }
 		spdTime _tsecsToTicks(uint secs) { return cast(spdTime)(secs * 1000); }
 		spdTime _tmsToTicks(uint ms) { return cast(spdTime)ms; }
@@ -1478,7 +1456,6 @@ template _tTicks()
 
 alias _tTicks!()._tticksToSecs _tticksToSecs;
 alias _tTicks!()._tticksToMs _tticksToMs;
-//alias _tTicks!()._tticksToNs _tticksToNs;
 alias _tTicks!()._tticksToMicrosecs _tticksToMicrosecs;
 alias _tTicks!()._tsecsToTicks _tsecsToTicks;
 alias _tTicks!()._tmsToTicks _tmsToTicks;
@@ -1498,8 +1475,6 @@ void _tticksToTimeval(spdTime ticks, spdMyTimeval* tv)
 	tv.microseconds = _tticksToMicrosecs(ticks);
 }
 
-
-//_tEventInfo[socket_t] _tallEvents;
 AsyncSocket[socket_t] _tallEvents;
 
 Thread _ththread;
@@ -1507,4 +1482,3 @@ GetHost _thnext, _thaddto;
 GetHost _thfinnext, _thfinlast;
 
 bool _texit = false;
-

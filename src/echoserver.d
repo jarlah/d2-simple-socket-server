@@ -25,18 +25,18 @@ import splatserver;
 
 int main(char[][] args)
 {
-	Server server = createSimpleServer();
-	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
-	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
-	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
-	server.setClientData("simpleserver.example.MyClientData");
-	server.setPort(1234);
-	server.setHost("localhost");
-	server.setName("SimpleServer EchoService");
-	server.startServer();
-	server.setAdminPort(2345);
-	server.setAdminName("SimpleServer AdminService");
-	server.startAdminServer();
+//	Server server = createSimpleServer();
+//	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
+//	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
+//	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
+//	server.setClientData("simpleserver.example.MyClientData");
+//	server.setPort(1234);
+//	server.setHost("localhost");
+//	server.setName("SimpleServer EchoService");
+//	server.startServer();
+//	server.setAdminPort(2345);
+//	server.setAdminName("SimpleServer AdminService");
+//	server.startAdminServer();
 	auto t = new Thread(&splat);
 	t.start();
 	return 0;
