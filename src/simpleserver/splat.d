@@ -18,6 +18,10 @@
 	3. This notice may not be removed or altered from any source distribution.
 */
 
+/*
+	The source has been altered from the original version as stated above.
+*/
+
 /** $(B ) Splat: the socket platform with the lame name. It's full of puns, but it runs!
 	<a href="http://www.dprogramming.com/splat.php">Download Splat</a>.
 	Version 0.7.
