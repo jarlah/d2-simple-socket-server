@@ -514,10 +514,10 @@ abstract class SimpleAuthenticator: Authenticator {
 	
 	void processLine(string line, void delegate() validateCredentials){
 		if(lastCommand is null){
-			sendCommand(":AUTH NICK", lastCommand);
+			sendCommand(":AUTH NICK");
 		}else if(":AUTH NICK" == lastCommand){
 			username = to!string(line);
-			sendCommand(":AUTH PASS", lastCommand);
+			sendCommand(":AUTH PASS");
 		}else if(":AUTH PASS" == lastCommand){
 			password = to!string(line);
 			validateCredentials();
@@ -534,11 +534,6 @@ abstract class SimpleAuthenticator: Authenticator {
     	lastCommand = cmd;
     }
     
-    void sendCommand(string cmd, ref string lc){
-    	socket.sendLine(cast(char[])cmd);
-    	lc = cmd;
-    }
-    
     string getUsername(){
     	return username;
     }
@@ -548,7 +543,6 @@ interface Authenticator {
 	void processLine(string line, void delegate() validateCredentials);
 	bool isAuthorized(IClientHandler handler); 
 	void sendCommand(string cmd);
-	void sendCommand(string cmd, ref string lastCommand);
 	void setSocket(AsyncSocket socket);
 	string getUsername();
 }
