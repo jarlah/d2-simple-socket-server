@@ -87,21 +87,10 @@ class SimpleClientSocket: AsyncTcpSocket
         queue.send(s ~ "\r\n");
     }
     
-    string username, password, lastCommand;
-    
     void onLine(char[] line)
     {
     	if(!allowed && authHandler !is null){
-    		if(lastCommand is null){
-				sendCommand(":AUTH NICK");
-			}else if(":AUTH NICK" == lastCommand){
-    			username = to!string(line);
-    			sendCommand(":AUTH PASS");
-    		}else if(":AUTH PASS" == lastCommand){
-    			password = to!string(line);
-    			validateCredentials();
-    			lastCommand = null;
-    		}
+    		authHandler.processLine(to!string(line), &validateCredentials);
     	}else if(!allowed && authHandler is null){
     		nick = cast(char[])"unknown";
     		goto handle_command;
@@ -114,15 +103,11 @@ class SimpleClientSocket: AsyncTcpSocket
     }
     
     void validateCredentials(){
-    	if(true == authHandler.isAuthorized(clientHandler,username,password))
-    		nick = cast(char[])username;
-    	else
+    	if(true == authHandler.isAuthorized(clientHandler)){
+    		nick = cast(char[])authHandler.getUsername();
+    		logger.info("User authenticated");
+    	}else
     		logger.error("Wrong credentials");
-    }
-    
-    void sendCommand(string cmd){
-    	sendLine(cast(char[])cmd);
-    	lastCommand =cmd;
     }
     
     void gotReadEvent()
@@ -252,8 +237,10 @@ class SimpleListenSocket: AsyncTcpSocket
 	            nsock.queue = new SocketQueue(nsock);
 	            nsock.commandHandler = commandHandler;
 	            nsock.authHandler = authHandler;
-	            if(authHandler !is null)
-	            	nsock.sendCommand(":AUTH NICK");
+	            if(authHandler !is null){
+	            	authHandler.setSocket(nsock);
+	            	authHandler.sendCommand(":AUTH NICK");
+	            }
 	            auto ahc = parent.socketHandlerClass;
 	            logger.info("Loading client handler class "~ahc);
 	            IClientHandler ch = cast(IClientHandler) Object.factory(ahc);
@@ -520,14 +507,56 @@ interface IClientHandler {
 
 interface ClientData {}
 
-interface Authenticator { 
-	bool isAuthorized(IClientHandler handler, string username, string password); 
+abstract class SimpleAuthenticator: Authenticator {
+	string username, password, lastCommand;
+	
+	SimpleClientSocket socket;
+	
+	void processLine(string line, void delegate() validateCredentials){
+		if(lastCommand is null){
+			sendCommand(":AUTH NICK", lastCommand);
+		}else if(":AUTH NICK" == lastCommand){
+			username = to!string(line);
+			sendCommand(":AUTH PASS", lastCommand);
+		}else if(":AUTH PASS" == lastCommand){
+			password = to!string(line);
+			validateCredentials();
+			lastCommand = null;
+		}
+	}
+	
+	void setSocket(AsyncSocket socket){
+		this.socket = cast(SimpleClientSocket) socket;
+	}
+	
+	void sendCommand(string cmd){
+    	socket.sendLine(cast(char[])cmd);
+    	lastCommand = cmd;
+    }
+    
+    void sendCommand(string cmd, ref string lc){
+    	socket.sendLine(cast(char[])cmd);
+    	lc = cmd;
+    }
+    
+    string getUsername(){
+    	return username;
+    }
+}
+
+interface Authenticator {
+	void processLine(string line, void delegate() validateCredentials);
+	bool isAuthorized(IClientHandler handler); 
+	void sendCommand(string cmd);
+	void sendCommand(string cmd, ref string lastCommand);
+	void setSocket(AsyncSocket socket);
+	string getUsername();
 }
 
 private:
-class AdminAuthenticator: Authenticator {
-	bool isAuthorized(IClientHandler clientHandler, string user, string pass){
-		return user == pass;
+class AdminAuthenticator: SimpleAuthenticator {
+	bool isAuthorized(IClientHandler clientHandler){
+		return username == password;
 	}
 }
 

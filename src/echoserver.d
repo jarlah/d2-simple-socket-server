@@ -45,9 +45,9 @@ class MyClientData: ClientData {
 	int count;
 }
 
-class DummyAuthenticator: Authenticator {
-	bool isAuthorized(IClientHandler clientHandler, string user, string pass){
-		if(user == pass){
+class DummyAuthenticator: SimpleAuthenticator {
+	bool isAuthorized(IClientHandler clientHandler){
+		if(username == password){
 			clientHandler.sendString("Welcome!");
 			return true;
 		}else
