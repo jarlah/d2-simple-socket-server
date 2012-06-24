@@ -21,7 +21,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 module simpleserver.example;
 import std.conv, std.string, std.socket, std.stdio, core.thread, std.concurrency, std.base64;
 import simpleserver.server;
-import splatserver;
 
 int main(char[][] args)
 {
