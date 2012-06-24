@@ -50,6 +50,234 @@ Server createSimpleServer()
 	return new SimpleServer();
 }
 
+import simpleserver.splat;
+
+void broadcast(char[] s)
+{
+    foreach(client; clients)
+    {	
+        client.sendLine(s);
+    }
+}
+
+class SimpleClientSocket: AsyncTcpSocket
+{
+    char[] nick;
+    
+    SocketQueue queue;
+    
+    IClientCommandHandler commandHandler;
+    
+    Authenticator authHandler;
+    
+    IClientHandler clientHandler;
+    
+    char[] fulladdress() // getter
+    {
+        return nick ~ "!user@foo.bar";
+    }
+    
+    bool allowed() // getter
+    {
+        return 0 != nick.length;
+    }
+    
+    void sendLine(char[] s)
+    {
+        queue.send(s ~ "\r\n");
+    }
+    
+    string username, password, lastCommand;
+    
+    void onLine(char[] line)
+    {
+    	if(!allowed && authHandler !is null){
+    		if(lastCommand is null){
+				sendCommand(":AUTH NICK");
+			}else if(":AUTH NICK" == lastCommand){
+    			username = to!string(line);
+    			sendCommand(":AUTH PASS");
+    		}else if(":AUTH PASS" == lastCommand){
+    			password = to!string(line);
+    			validateCredentials();
+    			lastCommand = null;
+    		}
+    	}else if(!allowed && authHandler is null){
+    		nick = cast(char[])"unknown";
+    		goto handle_command;
+    	}else if(allowed){
+    		handle_command:
+    		commandHandler.handleCommand(clientHandler,to!string(line));
+    	}else{
+    		sendLine(cast(char[])":AUTH ERR: Not logged in");
+    	}
+    }
+    
+    void validateCredentials(){
+    	if(true == authHandler.isAuthorized(clientHandler,username,password))
+    		nick = cast(char[])username;
+    	else
+    		logger.error("Wrong credentials");
+    }
+    
+    void sendCommand(string cmd){
+    	sendLine(cast(char[])cmd);
+    	lastCommand =cmd;
+    }
+    
+    void gotReadEvent()
+    {
+        byte[] peek;
+        find_line:
+        peek = cast(byte[])queue.peek();
+        foreach(idx, b; peek)
+        {
+            if('\r' == b || '\n' == b)
+            {
+                if(!idx)
+                {
+                    queue.receive(1); // Remove from queue.
+                    goto find_line;
+                }
+                queue.receive(cast(uint)idx + 1); // Remove from queue.
+                onLine(cast(char[])peek[0 .. idx]);
+                goto find_line;
+            }
+        }
+    }
+    
+    void netEvent(Socket sock, EventType type, int err)
+    {
+        if(err)
+        {
+            clients.remove(this);
+            closeSocket();
+            if(allowed)
+                broadcast(":" ~ fulladdress ~ " QUIT :Connection error");
+            return;
+        }
+        
+        switch(type)
+        {
+            case EventType.CLOSE:
+            	clients.remove(this);
+                closeSocket();
+                if(allowed)
+                    broadcast(":" ~ fulladdress ~ " QUIT :Connection closed");
+                break;
+            
+            case EventType.READ:
+                queue.readEvent();
+                if(queue.receiveBytes > 1024 * 4)
+                {
+                	clients.remove(this);
+                    closeSocket();
+                    queue.reset();
+                    if(allowed)
+                        broadcast(":" ~ fulladdress ~ " QUIT :Excess flood");
+                }
+                else
+                {
+                    gotReadEvent();
+                }
+                break;
+            
+            case EventType.WRITE:
+                if(queue.sendBytes > 1024 * 8)
+                {
+                	clients.remove(this);
+                    closeSocket();
+                    queue.reset();
+                    if(allowed)
+                        broadcast(":" ~ fulladdress ~ " QUIT :Excess send-queue");
+                }
+                else
+                {
+                    queue.writeEvent();
+                }
+                break;
+            
+            default: ;
+        }
+    }
+    
+    alias close closeSocket;
+}
+
+
+class SimpleListenSocket: AsyncTcpSocket
+{
+	private SimpleServer parent;
+	private IClientCommandHandler commandHandler;
+	private Authenticator authHandler;
+	private int MAX;
+	
+	this(SimpleServer p){
+		this.parent = p;
+		
+		logger.info("Starting "~parent.name); 
+		
+		auto chc = parent.commandHandlerClass;
+		
+		enforce(chc);
+		logger.info("Loading handler class "~chc);
+		commandHandler = cast(IClientCommandHandler) Object.factory(chc);
+		enforce(commandHandler);
+		
+		commandHandler.setServer(parent.service);
+		
+		auto ahc = parent.authHandlerClass;
+		
+		if(ahc !is null){
+			logger.info("Loading authenticator class "~ahc);
+			authHandler = cast(Authenticator) Object.factory(ahc);
+			enforce(authHandler);
+		}
+		
+		MAX = parent.MAX;
+	}
+	
+    override SimpleClientSocket accepting()
+    {
+        return new SimpleClientSocket();
+    }
+    
+    void netEvent(Socket sock, EventType type, int err)
+    {
+        if(!err)
+        {
+        	if(clients.length < MAX){
+	            SimpleClientSocket nsock = cast(SimpleClientSocket)sock.accept();
+	            
+	            nsock.queue = new SocketQueue(nsock);
+	            nsock.commandHandler = commandHandler;
+	            nsock.authHandler = authHandler;
+	            if(authHandler !is null)
+	            	nsock.sendCommand(":AUTH NICK");
+	            auto ahc = parent.socketHandlerClass;
+	            logger.info("Loading client handler class "~ahc);
+	            IClientHandler ch = cast(IClientHandler) Object.factory(ahc);
+	            
+	            auto dc = parent.clientDataClass;
+	            logger.info("Loading client data class "~dc);
+	            ClientData _dc = cast(ClientData) Object.factory(dc);
+	            
+	            ch.setup(nsock,_dc);
+	            
+	            nsock.clientHandler = ch;
+
+	            nsock.event(EventType.READ | EventType.WRITE | EventType.CLOSE, &nsock.netEvent);
+	            
+	            commandHandler.gotConnected(ch);
+            }else{
+            	commandHandler.gotRejected(sock);
+            }
+        }
+    }
+}
+	
+SimpleClientSocket[SimpleClientSocket] clients;
+
 class SimpleServer: Server{
 	public:
 	this(){
@@ -82,148 +310,28 @@ class SimpleServer: Server{
 	}
 	
 	void run(){
+		try{
+			initLogger();
+			scope lsock = new SimpleListenSocket(this);
+			scope lsockaddr = new InternetAddress(cast(const(char[]))host, to!short(port)); // Not standard IRC port.. not standard IRC server.
+			lsock.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, socketTimeout);
+			lsock.bind(lsockaddr);
+		    lsock.listen(backlog);
+		    lsock.blocking = blocking;
+		    lsock.event(EventType.ACCEPT, &lsock.netEvent);
+		    logger.info("Server ready on port "~to!string(port));
+	        simpleserver.splat.run();
+        }catch(Throwable o){
+        	logger.error(o.toString());
+        }
+	}
+	
+	public void initLogger(){
 		if(doNotLog == false){
 			logger = getSimpleLogger();
 		}else{
 			logger = getNoLogger();
 		}
-		
-		logger.info("Starting "~name); 
-		
-		enforce(commandHandlerClass);
-		logger.info("Loading handler class "~commandHandlerClass);
-		commandHandler = cast(IClientCommandHandler) Object.factory(commandHandlerClass);
-		enforce(commandHandler);
-		commandHandler.setServer(service);
-		
-		if(authHandlerClass !is null){
-			logger.info("Loading authenticator class "~authHandlerClass);
-			authHandler = cast(Authenticator) Object.factory(authHandlerClass);
-			enforce(authHandler);
-		}
-		
-		Socket listener = new TcpSocket;
-		assert(listener.isAlive);
-		
-		listener.blocking = blocking;
-		listener.bind(new InternetAddress(cast(const(char[]))host,to!ushort(port)));
-		listener.listen(backlog);
-			
-		logger.info("Listening on port "~to!string(port));
-		
-		SocketSet sset = new SocketSet(MAX+1);
-		
-		for (;; sset.reset())
-		{
-			sset.add(listener);
-
-			foreach (Socket each; handlers.keys)
-			{
-				sset.add(each);
-			}
-			
-			Socket.select(sset,null,null);
-			
-			int i;
-
-			for (i = 0;; i++)
-			{
-				next:
-				if (i == handlers.length)
-					break;
-					
-				auto sock = handlers.keys[i];
-				if (sset.isSet(sock))
-				{
-					auto handler = handlers[sock];
-					enforce(handler);
-
-					scope(failure){
-						closeSocket(handler);
-						goto next;
-					}
-
-					string read = to!string(handler.readLine());
-					if(read.length==0){
-						closeSocket(handler);
-						goto next;
-					}
-
-					logger.info(to!string("Received "~to!string(read.length)~"bytes from "~handler.remoteAddress()~": \""~read~"\""));
-
-					try{
-						commandHandler.handleCommand(handler, read);
-					}catch(Exception e){
-						logger.error(e.toString());
-						throw e;
-					}
-				}
-			}
-			
-			if (sset.isSet(listener))
-			{
-				Socket sn;
-				if (handlers.length < MAX)
-				{
-					scope(failure)
-						goto close;
-
-					sn = listener.accept();
-					sn.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, socketTimeout);
-					assert(sn.isAlive);
-					assert(listener.isAlive);
-
-					logger.info("Loading socket handler class "~socketHandlerClass);
-					IClientHandler handler = cast(IClientHandler)Object.factory(socketHandlerClass);
-					ClientData clientData = null;
-					if(clientDataClass !is null){
-						logger.info("Loading client data class "~clientDataClass);
-						clientData = cast(ClientData)Object.factory(clientDataClass);
-					}
-					
-					handler.setup(sn, clientData);
-
-					if(authHandler !is null){
-						bool authorized;
-						try{
-							authorized = authHandler.askAuthorisation(handler);
-						}catch(Exception e){
-							logger.error(e.toString());
-							authorized = false;
-						}
-						if(authorized){
-							logger.info("User authenticated");
-						}else{
-							logger.error("User failed to authenticate");
-							goto close;
-						}
-					}else{
-						handler.sendString(Authenticator.AUTH_OK~": Welcome.");
-					}
-
-					logger.info("Connection from "~handler.remoteAddress()~" established.");
-					commandHandler.gotConnected(handler);
-					handlers[sn] = handler;
-					logger.info("\tTotal connections: "~to!string(handlers.length));
-				}
-				else
-				{
-					sn = listener.accept();
-					assert(sn.isAlive);
-					commandHandler.gotRejected(sn);
-					logger.warning("Rejected connection; too many connections.");
-
-					close:
-					sn.close();
-					assert(!sn.isAlive);
-					assert(listener.isAlive);
-				}
-			}
-		}
-	}
-	
-	IClientCommandHandler getCommandHandler(){
-		return this.commandHandler;
 	}
 	
 	override void setCommandHandler(string handlerClass) {
@@ -318,31 +426,15 @@ class SimpleServer: Server{
 	string commandHandlerClass	= null;
 	string authHandlerClass		= null;
 	string clientDataClass 		= null;
-	Authenticator authHandler	= null;
 	Server service				= null;
 	Server adminServer			= null;
-	IClientCommandHandler commandHandler;
 	IClientHandler[Socket] handlers;
-	
-	void closeSocket(IClientHandler handler){
-		commandHandler.closingConnection(handler);
-		try
-		{
-			logger.warning("Connection from "~handler.remoteAddress()~" closed.");
-		} catch (SocketException) {
-			logger.warning("Connection closed.");
-		}
-		handler.close();
-		handlers.remove(handler.getSocket);
-		logger.info("\tTotal connections: "~to!string(handlers.length));
-		commandHandler.lostConnection(handler);
-	}
 }
 
-class AbstractClientCommandHandler: IClientCommandHandler {
-	Server server;
+abstract class AbstractClientCommandHandler: IClientCommandHandler {
+	private Server server;
 	this(){}
-	void handleCommand(IClientHandler socket, string command){};
+	abstract void handleCommand(IClientHandler socket, string command);
 	void gotConnected(IClientHandler socket){};
 	void gotRejected(Socket socket){};
 	void closingConnection(IClientHandler socket){};
@@ -369,39 +461,15 @@ abstract class AbstractClientHandler: IClientHandler {
 	public:
 	this(){}
 	
-	void setup(ref Socket sock, ClientData cd){
+	void setup(ref SimpleClientSocket sock, ClientData cd){
 		this.socket = sock;
-		this.stream = new SocketStream(sock);
 		this.clientData = cd;
 		this._remoteAddress = remoteAddress();
 		this._localAddress = localAddress();
 	}
 	
 	void sendString(string msg){
-		stream.writeLine(msg);
-	}
-	
-	void sendBytes(const(ubyte[]) bytes){
-		stream.writeLine("+RCV BASE64 "~Base64.encode(bytes));
-		string response = to!string(readLine());
-		if(response.startsWith("+RCV OK")){
-			logger.info("Successfully sent bytes to the client");
-		}else if(response.startsWith("+RCV ERR ")){
-			string chomped = strip(chompPrefix(response,"+RCV ERR "));
-			if(chomped.length > 0){
-				logger.error("An error occured on the client while receiving the bytes: "~chomped);
-			}else{
-				logger.error("An unknown error occured on the client while receiving the bytes");
-			}
-		}
-	}
-	
-	string readLine(){
-		return readString();
-	}
-	
-	string readString(){
-		return to!string(stream.readLine());
+		socket.sendLine(cast(char[])msg);
 	}
 	
 	string remoteAddress(){
@@ -419,7 +487,7 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	void close(){
-		stream.close();
+		socket.close();
 	}
 	
 	Socket getSocket(){
@@ -433,21 +501,18 @@ abstract class AbstractClientHandler: IClientHandler {
 	}
 	
 	private:
-	Socket socket;
-	SocketStream stream;
+	SimpleClientSocket socket;
 	ClientData clientData;
 	string _remoteAddress;
 	string _localAddress;
 }
 
 interface IClientHandler {
-	string 		readString();
-	string 		readLine();
 	void 		sendString(string msg);
-	void  		sendBytes(const(ubyte[]) bytes);
 	string 		remoteAddress();
 	string 		localAddress();
-	void 		setup(ref Socket socket, ClientData cd);
+	void 		setup(ref SimpleClientSocket socket, ClientData cd) 
+	in { assert(cd !is null); }
 	Socket 		getSocket();
 	ClientData 	getClientData();
 	void 		close();
@@ -456,51 +521,16 @@ interface IClientHandler {
 interface ClientData {}
 
 interface Authenticator { 
-	bool 		askAuthorisation(IClientHandler handler); 
-	static 		string AUTH_OK = "AUTH OK";
-	static 		string AUTH_ERR = "AUTH ERR";
-}
-
-abstract class QuickAuthenticator: Authenticator {	
-	this(){}
-	
-	string askStringInput(IClientHandler clientHandler, string prompt){
-		clientHandler.sendString(prompt);
-		return getStringInput(clientHandler);
-	}
-	
-	string getStringInput(IClientHandler clientHandler){
-		return to!string(clientHandler.readLine());
-	}
-	
-	void sendString(IClientHandler clientHandler, string message){
-		clientHandler.sendString(message);
-	}
+	bool isAuthorized(IClientHandler handler, string username, string password); 
 }
 
 private:
-class AdminAuthenticator: QuickAuthenticator {
-	bool askAuthorisation(IClientHandler clientHandler){
-		clientHandler.sendString("+OK --------------------------------------");
-		clientHandler.sendString("+OK This server requires authentication!");
-		clientHandler.sendString("+OK");
-		clientHandler.sendString("+OK --------------------------------------");
-		
-		string username = askStringInput(clientHandler, "+OK Username required");
-		string password = askStringInput(clientHandler, "+OK Password required");
-
-        if(username is null || password  is null)
-        	return false;
-
-        if(username == password) {
-        	sendString(clientHandler, "+OK Logged in");
-            return true;
-        } else {
-            sendString(clientHandler, "-ERR Authorisation Failed");
-            return false;
-        }
+class AdminAuthenticator: Authenticator {
+	bool isAuthorized(IClientHandler clientHandler, string user, string pass){
+		return user == pass;
 	}
 }
+
 class AdminClientCommandHandler: AbstractClientCommandHandler {
 	this(){
 		super();

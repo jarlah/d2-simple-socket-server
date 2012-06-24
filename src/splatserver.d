@@ -55,7 +55,6 @@ class IrcClientSocket: AsyncTcpSocket
     {
     	clients[this] = this;
     	sendLine(line);
-    	std.stdio.writeln(clients);
     }
     
     void gotReadEvent()
@@ -175,6 +174,7 @@ void splat()
 		scope lsockaddr = new NetAddr(NetAddr.ADDR_ANY, 1667); // Not standard IRC port.. not standard IRC server.
 	    lsock.bind(lsockaddr);
 	    lsock.listen(10);
+	    lsock.blocking = false;
 	    lsock.event(EventType.ACCEPT, &lsock.netEvent);
 	    writeln("Server ready on port 1667");
         simpleserver.splat.run();

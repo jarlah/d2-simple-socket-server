@@ -34,8 +34,6 @@ import java.util.*;
  */
 public class SocketClient {
 	
-	private static final String AUTH_OK = "AUTH OK";
-	
 	public static String sendAndWait(String msg, BufferedReader in, PrintWriter out) throws Exception{
 		out.print(msg+"\n");
 		out.flush();
@@ -68,15 +66,15 @@ public class SocketClient {
 						
 					try {			
 						String prompt = in.readLine();
-						if(prompt!=null && prompt.contains("User Name :")){
+						if(prompt!=null && prompt.contains(":AUTH NICK")){
 							prompt = sendAndWait("jarl",in, out);
-							if(prompt!=null && prompt.contains("Password :")){
+							if(prompt!=null && prompt.contains(":AUTH PASS")){
 								prompt = sendAndWait("jarl",in, out);
-								if(prompt.contains(AUTH_OK)){
+								if(prompt.contains("Welcome!")){
 									prompt = sendAndWait("Dette er en test",in, out);
 								}
 							}
-						}else if(prompt.startsWith(AUTH_OK)){
+						}else{
 							prompt = sendAndWait("Dette er en test",in, out);
 						 }
 						 string = prompt;
@@ -107,7 +105,7 @@ public class SocketClient {
 			String string = r.get();
 			if(string == null)
 				System.err.println("Got empty response");
-			else if(!string.contains("Dette er en test")){
+			else if(!string.startsWith("Dette er en test")){
 				System.err.println("Does not match; "+string);
 			}else{
 				ok++;

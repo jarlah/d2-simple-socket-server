@@ -96,13 +96,13 @@ void run()
 					}
 				}
 				
-//				debug(splat)
-//				{
+				debug(splat)
+				{
 					if(INFINITE != ms)
 						printf("  {SLEEP} %lu ms\n", cast(uint)ms);
-					//else
-					//	printf("  {SLEEP} infinite\n");
-//				}
+					else
+						printf("  {SLEEP} infinite\n");
+				}
 				
 				Sleep(ms);
 				goto timedout;
@@ -112,9 +112,10 @@ void run()
 		ptv = null;
 		if(tn)
 		{
-			printf("splattimer: diff = %d; dotimer = %s\n",
-					cast(int)(dnow - tn._talarm),
-					dotimer ? "true".ptr : "false".ptr);
+			debug(splat)
+				printf("splattimer: diff = %d; dotimer = %s\n",
+						cast(int)(dnow - tn._talarm),
+						dotimer ? "true".ptr : "false".ptr);
 			
 			if(tn._talarm <= dnow)
 			{
@@ -139,8 +140,6 @@ void run()
 				_tticksToTimeval(tn._talarm - dnow, &tv);
 				if(tv.microseconds < 0)
 					tv.microseconds = 0;
-				//if(tv.microseconds > 32767)
-				//	tv.microseconds = 32767;
 				if(tv.seconds < 0)
 					tv.seconds = 0;
 				if(tv.seconds > 60)
@@ -159,7 +158,7 @@ void run()
 		}
 		else
 		{
-//			debug(splattimer)
+			debug(splattimer)
 				printf("splattimer: no timers\n");
 			
 			if(_areHosts())
@@ -174,21 +173,19 @@ void run()
 		writes.reset();
 		
 		uint numadds = 0;
-		foreach(AsyncSocket sock; _tallEvents)
+		foreach(socket_t key; _tallEvents.keys)
 		{
+			AsyncSocket sock = _tallEvents[key];
+			
 			//debug
-//			debug(splat)
-//			{
+			debug(splat)
+			{
 				if(!sock.isAlive())
 				{
-//					debug(splat)
-//					{
-						printf("Splat warning: dead socket still waiting for events\n");
-						fflush(stdout);
-//					}
-					//continue;
+					deadSocket(key);
+					continue;
 				}
-//			}
+			}
 			
 			if(((sock._events & EventType.READ) && !(sock._events & EventType._CANNOT_READ))
 				|| ((sock._events & EventType.ACCEPT) && !(sock._events & EventType._CANNOT_ACCEPT))
@@ -215,16 +212,16 @@ void run()
 				goto no_socket_events;
 		}
 		
-//		debug(splat)
-//		{
+		debug(splat)
+		{
 			if(ptv)
 			{
 				if(0 != ptv.seconds || 0 != ptv.microseconds)
 					printf("  {SELECT} %lu secs, %lu microsecs\n", cast(uint)ptv.seconds, cast(uint)ptv.microseconds);
 			}
-//		}
+		}
 		
-//		debug(splatselect)
+		debug(splatselect)
 			printf("Socket.select(%u sockets%s)\n", numadds,
 				ptv ? (((0 != ptv.seconds || 0 != ptv.microseconds)) ? ", timeout".ptr : ", 0 timeout") : ", infinite-wait".ptr);
 
@@ -246,8 +243,10 @@ void run()
 					if(_texit)
 						return;
 					
-					if(!sock.isAlive())
+					if(!sock.isAlive()){
+						deadSocket(key);
 						continue;
+					}
 					
 					if(reads.isSet(sock))
 					{
@@ -352,13 +351,21 @@ void run()
 	}
 }
 
+void deadSocket(socket_t key) {
+	debug(splat)
+	{
+		printf("Splat warning: dead socket still waiting for events\n");
+		fflush(stdout);
+	}
+	
+	_tallEvents.remove(key);
+}
 
 /// Causes run() to return as soon as it can.
 void exitLoop()
 {
 	_texit = true;
 }
-
 
 private void _tdotimers()
 {
@@ -615,10 +622,8 @@ class AsyncSocket: Socket
 	
 	override void close()
 	{
-		std.stdio.writeln(_tallEvents);
 		_events = EventType.NONE;
 		_tallEvents.remove(this.handle);
-		std.stdio.writeln(_tallEvents);
 		super.close();
 	}
 	
@@ -745,8 +750,8 @@ class AsyncSocket: Socket
 	
 	void _tgotEvent(EventType type, int err)
 	{
-//		debug(splat)
-//		{
+		debug(splat)
+		{
 			if(type == EventType.READ)
 				printf("  {READ:%p}\n", cast(void*)this);
 			else if(type == EventType.WRITE)
@@ -757,7 +762,7 @@ class AsyncSocket: Socket
 				printf("  {CLOSE:%p}\n", cast(void*)this);
 			else if(type == EventType.ACCEPT)
 				printf("  {ACCEPT:%p}\n", cast(void*)this);
-//		}
+		}
 		
 		if(_callback)
 			_callback(this, type, err);
@@ -969,10 +974,10 @@ version(THSLEEP)
 
 private void _tgethost(GetHost gh)
 {
-//	debug(splat)
-//	{
+	debug(splat)
+	{
 		printf("  {GETHOST:%p}\n", cast(void*)gh);
-//	}
+	}
 	
 	//synchronized
 	{
@@ -980,7 +985,6 @@ private void _tgethost(GetHost gh)
 		
 		if(!_ththread)
 		{
-			//printf("GETHOST:newthread\n");
 			_ththread = new Thread(&_ththreadproc);
 			_thnext = _thaddto = gh;
 			_ththread.start();
@@ -991,9 +995,9 @@ private void _tgethost(GetHost gh)
 		{
 			if(!_thaddto)
 			{
-				//printf("GETHOST:!_thaddto\n");
 				version(SPLAT_HACK_PRINTF)
 					printf(""); // Without this, the thread never sees this host.
+					
 				_thnext = _thaddto = gh;
 				
 				version(THSLEEP)
@@ -1001,17 +1005,16 @@ private void _tgethost(GetHost gh)
 				}
 				else
 				{
-//					debug(splat)
-//					{
+					debug(splat)
+					{
 						printf("  {RESUMING:_ththreadproc}\n");
-//					}
+					}
 					
 					_ththread.resume();
 				}
 			}
 			else
 			{
-				//printf("GETHOST:_thaddto\n");
 				_thaddto._tnext = gh;
 				_thaddto = gh;
 			}
@@ -1026,7 +1029,6 @@ private void _dothreadproc()
 	spdInternetHost ih;
 	for(;;)
 	{
-		//synchronized(_ththread)
 		synchronized
 		{
 			gh = _thnext;
@@ -1040,17 +1042,17 @@ private void _dothreadproc()
 			}
 			else
 			{
-//				debug(splat)
-//				{
+				debug(splat)
+				{
 					printf("  {PAUSE:_ththreadproc}\n");
-//				}
+				}
 				
 				_ththread.pause();
 				
-//				debug(splat)
-//				{
+				debug(splat)
+				{
 					printf("  {RESUMED:_ththreadproc}\n");
-//				}
+				}
 			}
 			continue;
 		}
@@ -1071,10 +1073,10 @@ private void _dothreadproc()
 						gh._tinetHost = ih;
 				}
 				
-//				debug(splat)
-//				{
+				debug(splat)
+				{
 					printf("  {GOTHOST:%p} %s\n", cast(void*)gh, gh._tinetHost ? "true".ptr : "false".ptr);
-//				}
+				}
 			}
 			catch
 			{
@@ -1097,10 +1099,10 @@ private void _thpn(GetHost gh)
 	{
 		assert(gh is _thnext);
 		
-//		debug(splat)
-//		{
+		debug(splat)
+		{
 			printf("  {DONEHOST:%p}\n", cast(void*)gh);
-//		}
+		}
 		
 		_thnext = _thnext._tnext;
 		if(!_thnext)
@@ -1448,14 +1450,11 @@ body
 
 template _tTicks()
 {
-	static if(true)
-	{
-		uint _tticksToSecs(spdTime ticks) { return cast(uint)(ticks / 1000); }
-		uint _tticksToMs(spdTime ticks) { return cast(uint)ticks; }
-		uint _tticksToMicrosecs(spdTime ticks) { return cast(uint)(cast(double)ticks / cast(double)1000 * cast(double)1_000_000); }
-		spdTime _tsecsToTicks(uint secs) { return cast(spdTime)(secs * 1000); }
-		spdTime _tmsToTicks(uint ms) { return cast(spdTime)ms; }
-	}
+	uint _tticksToSecs(spdTime ticks) { return cast(uint)(ticks / 1000); }
+	uint _tticksToMs(spdTime ticks) { return cast(uint)ticks; }
+	uint _tticksToMicrosecs(spdTime ticks) { return cast(uint)(cast(double)ticks / cast(double)1000 * cast(double)1_000_000); }
+	spdTime _tsecsToTicks(uint secs) { return cast(spdTime)(secs * 1000); }
+	spdTime _tmsToTicks(uint ms) { return cast(spdTime)ms; }
 }
 
 alias _tTicks!()._tticksToSecs _tticksToSecs;

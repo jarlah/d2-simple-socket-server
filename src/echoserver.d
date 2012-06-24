@@ -25,45 +25,34 @@ import splatserver;
 
 int main(char[][] args)
 {
-//	Server server = createSimpleServer();
-//	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
-//	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
-//	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
-//	server.setClientData("simpleserver.example.MyClientData");
-//	server.setPort(1234);
-//	server.setHost("localhost");
-//	server.setName("SimpleServer EchoService");
-//	server.startServer();
-//	server.setAdminPort(2345);
-//	server.setAdminName("SimpleServer AdminService");
-//	server.startAdminServer();
-	auto t = new Thread(&splat);
-	t.start();
+	Server server = createSimpleServer();
+	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
+	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
+	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
+	server.setClientData("simpleserver.example.MyClientData");
+	server.setPort(1234);
+	server.setHost("localhost");
+	server.setName("SimpleServer EchoService");
+	server.startServer();
+	server.setAdminPort(2345);
+	server.setAdminName("SimpleServer AdminService");
+	server.startAdminServer();
 	return 0;
 }
 
 class MyClientData: ClientData {
 	string username;
 	ubyte[] bytes;
+	int count;
 }
 
-class DummyAuthenticator: QuickAuthenticator {
-	bool askAuthorisation(IClientHandler clientHandler){
-		string username = askStringInput(clientHandler, "User Name :");
-		string password = askStringInput(clientHandler, "Password :");
-
-        if(username is null || password  is null)
-        	return false;
-
-        if(username == password) {
-        	sendString(clientHandler, AUTH_OK~": Logged in successfully.");
-        	MyClientData clientData = cast(MyClientData)clientHandler.getClientData();
-	        clientData.username = username;
-            return true;
-        } else {
-            sendString(clientHandler, AUTH_ERR~": Username must equal password.");
-            return false;
-        }
+class DummyAuthenticator: Authenticator {
+	bool isAuthorized(IClientHandler clientHandler, string user, string pass){
+		if(user == pass){
+			clientHandler.sendString("Welcome!");
+			return true;
+		}else
+			return false;
 	}
 }
 
@@ -73,30 +62,9 @@ class SimpleClientCommandHandler: AbstractClientCommandHandler {
 	}
 	
 	override void handleCommand(IClientHandler clientHandler, string command){
-		MyClientData data = cast(MyClientData)clientHandler.getClientData();
-		logger.info("Got message: "~command);
-		if(command.startsWith("+RCV BASE64 ")){
-			string chomped = strip(chompPrefix(command,"+RCV BASE64 "));
-			if(chomped.length==0){
-				clientHandler.sendString("+RCV ERR Missing argument?");
-			}else{
-				clientHandler.sendString("+RCV OK");
-				ubyte[] msg = Base64.decode(chomped);
-				clientHandler.sendBytes(msg);
-				logger.info("Received and echoed "~to!string(msg.length)~" bytes");
-				data.bytes = msg;
-			}
-		}else{
-			clientHandler.sendString(command);
-			logger.info("Echoed the message");
-		}
-	}
-	
-	override void closingConnection(IClientHandler socket){
-		logger.info("Closing socket from "~socket.remoteAddress());
-	}
-	
-	override void lostConnection(IClientHandler socket){
-		logger.info("Lost connection from "~socket.remoteAddress());
+		MyClientData data = cast(MyClientData)clientHandler.getClientData;
+		data.count++;
+		clientHandler.sendString(command~" for the "~to!string(data.count)~" time");
+		logger.info("Echoed the message");
 	}
 }
