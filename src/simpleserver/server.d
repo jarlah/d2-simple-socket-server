@@ -56,7 +56,7 @@ void broadcast(char[] s)
 {
     foreach(client; clients)
     {	
-        client.sendLine(s);
+        //client.sendLine(s);
     }
 }
 
@@ -145,10 +145,12 @@ class SimpleClientSocket: AsyncTcpSocket
         switch(type)
         {
             case EventType.CLOSE:
+            	commandHandler.closingConnection(clientHandler);
             	clients.remove(this);
                 closeSocket();
                 if(allowed)
                     broadcast(":" ~ fulladdress ~ " QUIT :Connection closed");
+                commandHandler.lostConnection(clientHandler);
                 break;
             
             case EventType.READ:
@@ -194,7 +196,6 @@ class SimpleListenSocket: AsyncTcpSocket
 {
 	private SimpleServer parent;
 	private IClientCommandHandler commandHandler;
-	private Authenticator authHandler;
 	private int MAX;
 	
 	this(SimpleServer p){
@@ -210,14 +211,6 @@ class SimpleListenSocket: AsyncTcpSocket
 		enforce(commandHandler);
 		
 		commandHandler.setServer(parent.service);
-		
-		auto ahc = parent.authHandlerClass;
-		
-		if(ahc !is null){
-			logger.info("Loading authenticator class "~ahc);
-			authHandler = cast(Authenticator) Object.factory(ahc);
-			enforce(authHandler);
-		}
 		
 		MAX = parent.MAX;
 	}
@@ -236,14 +229,26 @@ class SimpleListenSocket: AsyncTcpSocket
 	            
 	            nsock.queue = new SocketQueue(nsock);
 	            nsock.commandHandler = commandHandler;
+	            
+	            auto ahc = parent.authHandlerClass;
+	            Authenticator authHandler = null;
+	            
+				if(ahc !is null){
+					logger.info("Loading authenticator class "~ahc);
+					authHandler = cast(Authenticator) Object.factory(ahc);
+					enforce(authHandler);
+				}
+				
 	            nsock.authHandler = authHandler;
+	            
 	            if(authHandler !is null){
 	            	authHandler.setSocket(nsock);
 	            	authHandler.sendCommand(":AUTH NICK");
 	            }
-	            auto ahc = parent.socketHandlerClass;
-	            logger.info("Loading client handler class "~ahc);
-	            IClientHandler ch = cast(IClientHandler) Object.factory(ahc);
+	            
+	            auto shc = parent.socketHandlerClass;
+	            logger.info("Loading client handler class "~shc);
+	            IClientHandler ch = cast(IClientHandler) Object.factory(shc);
 	            
 	            auto dc = parent.clientDataClass;
 	            logger.info("Loading client data class "~dc);
@@ -256,6 +261,10 @@ class SimpleListenSocket: AsyncTcpSocket
 	            nsock.event(EventType.READ | EventType.WRITE | EventType.CLOSE, &nsock.netEvent);
 	            
 	            commandHandler.gotConnected(ch);
+	            
+	            clients[nsock] = nsock;
+	            
+	            logger.info("Current number of clients: "~to!string(clients.length));
             }else{
             	commandHandler.gotRejected(sock);
             }
