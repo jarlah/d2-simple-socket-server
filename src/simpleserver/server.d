@@ -35,6 +35,7 @@ abstract class Server: Thread {
 	void setHost(string host);
 	void setPort(int port);
 	void setAdminPort(int port);
+	void setAdminHost(string host);
 	void setName(string name);
 	void setAdminName(string name);
 	void setAuthenticator(string handlerClass);
@@ -362,6 +363,12 @@ class SimpleServer: Server{
 		this.host = host;
 	}
 	
+	void setAdminHost(string host) in {
+		enforce("Host cannot be null",host);
+	} body {
+		this.adminHost = host;
+	}
+	
 	void setMax(int max) in {
 		assert(max>1, "Max be larger than 0");
 	} body {
@@ -411,6 +418,7 @@ class SimpleServer: Server{
 	auto host 					= "localhost";
 	auto port 					= 1234;
 	auto adminPort 				= 2345;
+	auto adminHost				= "localhost";
 	auto name 					= "SimpleServer";
 	auto adminName 				= "SimpleServer Admin";
 	auto blocking 				= false;
@@ -508,7 +516,7 @@ interface IClientHandler {
 	string 		remoteAddress();
 	string 		localAddress();
 	void 		setup(ref SimpleClientSocket socket, ClientData cd) 
-	in { assert(cd !is null); }
+				in { assert(cd !is null); }
 	Socket 		getSocket();
 	ClientData 	getClientData();
 	void 		close();

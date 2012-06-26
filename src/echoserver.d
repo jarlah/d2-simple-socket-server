@@ -22,21 +22,25 @@ module simpleserver.example;
 import std.conv, std.string, std.socket, std.stdio, core.thread, std.concurrency, std.base64;
 import simpleserver.server;
 
-int main(char[][] args)
+void main(char[][] args)
 {
 	Server server = createSimpleServer();
+	
 	server.setCommandHandler("simpleserver.example.SimpleClientCommandHandler");
 	server.setAuthenticator("simpleserver.example.DummyAuthenticator");
 	server.setSocketHandler("simpleserver.server.DefaultClientHandler");
 	server.setClientData("simpleserver.example.MyClientData");
 	server.setPort(1234);
 	server.setHost("localhost");
-	server.setName("SimpleServer EchoService");
+	server.setName("SimpleServer::Echo");
+	
 	server.startServer();
+	
 	server.setAdminPort(2345);
-	server.setAdminName("SimpleServer AdminService");
+	server.setAdminHost("localhost");
+	server.setAdminName("SimpleServer::Admin");
+	
 	server.startAdminServer();
-	return 0;
 }
 
 class MyClientData: ClientData {
